@@ -191,3 +191,14 @@ jobs:
             tests/fixtures/dxf/basidraft_revision_old_r12.dxf \
             -exec scripts/Developer/BasiDraft/BasiDraftAtomicRefreshSmoke.js \
             -quit
+      - name: Revise overall dimensions through logical-view extent bindings
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          ./debug/qcad-bin \
+            -allow-multiple-instances \
+            -no-show \
+            -config /tmp/basidraft-extent-binding.ini \
+            tests/fixtures/dxf/basidraft_extent_old_r12.dxf \
+            -exec scripts/Developer/BasiDraft/BasiDraftExtentBindingSmoke.js \
+            -quit
