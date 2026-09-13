@@ -55,6 +55,13 @@ struct SnapshotSimilarity {
     std::size_t leftPrimitiveCount = 0;
     std::size_t rightPrimitiveCount = 0;
     std::size_t commonPrimitiveCount = 0;
+
+    // Local revision diagnostics. For a matched view these counts tell the next
+    // layer how much geometry disappeared and appeared, rather than treating the
+    // whole view as replaced.
+    std::size_t removedPrimitiveCount = 0; // present only in left / old version
+    std::size_t addedPrimitiveCount = 0;   // present only in right / new version
+
     double score = 0.0; // common / max(left, right)
 };
 
