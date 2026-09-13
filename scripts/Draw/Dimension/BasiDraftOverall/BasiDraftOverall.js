@@ -1,12 +1,14 @@
 include("scripts/EAction.js");
-include("scripts/Developer/BasiDraft/BasiDraftOwnership.js");
+include("scripts/Developer/BasiDraft/BasiDraftLogicalViews.js");
+include("scripts/Developer/BasiDraft/BasiDraftDimensionBinding.js");
 
 /**
  * First BasiDraft automatic dimensioning action.
  *
- * The user selects the geometry of one drawing view. The action derives the
- * exact selection bounding box and adds native QCAD overall width and height
- * dimensions. No geometry recognition is guessed beyond the selected bounds.
+ * The user selects the complete geometry of one logical view. The action derives
+ * the selection bounding box and adds native QCAD overall width / height
+ * dimensions. Every created BasiDraft dimension receives a semantic view-extent
+ * binding immediately; unbound owned dimensions are never created.
  */
 function BasiDraftOverall(guiAction) {
     EAction.call(this, guiAction);
@@ -52,6 +54,43 @@ BasiDraftOverall.createDimensionData = function(box, offset) {
     return result;
 };
 
+BasiDraftOverall.boxMatchesLogicalView = function(box, viewBox, tolerance) {
+    if (isNull(box) || isNull(viewBox)) {
+        return false;
+    }
+    var min = box.getMinimum();
+    var max = box.getMaximum();
+    return Math.abs(min.x-viewBox.minX) <= tolerance &&
+           Math.abs(min.y-viewBox.minY) <= tolerance &&
+           Math.abs(max.x-viewBox.maxX) <= tolerance &&
+           Math.abs(max.y-viewBox.maxY) <= tolerance;
+};
+
+/**
+ * Returns one unambiguous logical view whose world-space bounds equal the
+ * selected geometry bounds. Full-view selection is intentional for this first
+ * automatic overall-dimension command: if identity is not certain, do not make
+ * an owned dimension that cannot be safely revised later.
+ */
+BasiDraftOverall.findLogicalViewIndex = function(document, box) {
+    var logical = BasiDraftLogicalViews.analyzeLogicalViews(document);
+    var scale = Math.max(Math.abs(box.getWidth()), Math.abs(box.getHeight()), 1.0);
+    var tolerance = Math.max(1.0e-4, scale*1.0e-7);
+    var found = -1;
+
+    for (var i=0; i<logical.views.length; ++i) {
+        if (!BasiDraftOverall.boxMatchesLogicalView(box, logical.views[i].box, tolerance)) {
+            continue;
+        }
+        if (found !== -1) {
+            // Never choose between two coincident candidate views silently.
+            return -1;
+        }
+        found = i;
+    }
+    return found;
+};
+
 BasiDraftOverall.prototype.beginEvent = function() {
     EAction.prototype.beginEvent.call(this);
 
@@ -75,6 +114,16 @@ BasiDraftOverall.prototype.beginEvent = function() {
     var height = box.getHeight();
     if (width <= RS.PointTolerance && height <= RS.PointTolerance) {
         EAction.handleUserMessage(qsTr("Выделенная геометрия не имеет измеримого габарита."));
+        this.terminate();
+        return;
+    }
+
+    var viewIndex = BasiDraftOverall.findLogicalViewIndex(document, box);
+    if (viewIndex < 0) {
+        EAction.handleUserWarning(qsTr(
+            "Не удалось однозначно связать выделение с одним логическим видом. " +
+            "Габаритные размеры не созданы, чтобы не оставить небезопасные привязки."
+        ));
         this.terminate();
         return;
     }
@@ -111,12 +160,33 @@ BasiDraftOverall.prototype.beginEvent = function() {
         return;
     }
 
+    var modes = [];
+    if (width > RS.PointTolerance) {
+        modes.push("width");
+    }
+    if (height > RS.PointTolerance) {
+        modes.push("height");
+    }
+    if (modes.length !== data.length) {
+        EAction.handleUserWarning(qsTr("Не удалось сформировать безопасные привязки габаритных размеров."));
+        this.terminate();
+        return;
+    }
+
     var op = new RAddObjectsOperation();
     op.setText(qsTr("BasiDraft: габаритные размеры"));
 
     for (var i = 0; i < data.length; ++i) {
         var entity = new RDimRotatedEntity(document, data[i]);
-        BasiDraftOwnership.mark(entity, "Dimension");
+        var binding = BasiDraftDimensionBinding.makeViewExtentBinding(
+            viewIndex,
+            modes[i]
+        );
+        if (!BasiDraftDimensionBinding.attach(entity, binding)) {
+            EAction.handleUserWarning(qsTr("Не удалось привязать габаритный размер к виду."));
+            this.terminate();
+            return;
+        }
         op.addObject(entity);
     }
 
