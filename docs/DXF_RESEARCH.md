@@ -1,115 +1,127 @@
 # BAZIS DXF research notes
 
-This document records facts verified against a real BAZIS drawing exported as both LDW and DXF. The production drawing itself is not committed to the public repository.
+This document records facts verified against real BAZIS drawings exported as DXF, with paired LDW files retained privately for comparison. Production drawings are not committed to the public repository.
 
 ## Architectural conclusion
 
 DXF is the preferred primary geometry transport from BAZIS into BasiDraft.
 
-Reasons:
+QCAD already imports DXF natively, so BasiDraft can focus on the valuable work:
 
-- QCAD already has a mature native DXF data model and importer;
-- the tested BAZIS DXF reproduces the visible sheet very closely;
-- dimensions, text and graphic groups arrive as typed CAD objects instead of opaque binary records;
-- ordinary graphic blocks and dimension graphic blocks are structurally separated;
-- this lets BasiDraft spend engineering effort on geometry interpretation, automatic dimensions and revision tracking instead of reverse-engineering every LDW record.
+`DXF raw geometry -> normalization -> logical views -> semantic features -> BasiDraft annotations`
 
-LDW research remains useful as an optional metadata / fallback path because LDW retains BAZIS-specific structure that is not necessarily exposed as ordinary DXF layers.
+LDW remains an optional metadata / fallback research path where BAZIS-specific hierarchy proves useful.
 
-## Verified DXF characteristics
+The import contract is authoritative: dimensions, text, leaders and other BAZIS annotations are not required production input. BAZIS provides geometry; BasiDraft creates the drawing annotation layer.
 
-Tested DXF version: AC1027 (AutoCAD 2013).
+## Controlled real-file corpus
 
-Model space contained 688 top-level entities:
+A second controlled corpus was provided as four DXF/LDW pairs from the same furniture project:
 
-- 549 LINE
-- 77 DIMENSION
-- 54 INSERT
-- 8 TEXT
+- fully annotated / information-rich sheet;
+- simple geometry sheet;
+- clean geometry sheet;
+- the same clean geometry after moving one shelf.
 
-The file contained 131 anonymous blocks. Their use was cleanly separated:
+All four current DXF files are AC1015 (AutoCAD 2000). This shows that BAZIS DXF version must not be hard-coded from the first sample alone.
 
-- 77 blocks were referenced only by DIMENSION entities;
-- 54 blocks were referenced only by ordinary INSERT entities;
-- no anonymous block was shared between those two groups.
+### Top-level model-space entities
 
-This is valuable because dimension graphics can be distinguished from drawing-view geometry without geometric guessing.
+| Fixture | LINE | INSERT | DIMENSION | TEXT | Total |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| information-rich | 15 | 48 | 59 | 12 | 134 |
+| simple | 2 | 22 | 0 | 0 | 24 |
+| clean | 548 | 22 | 0 | 0 | 570 |
+| clean, shelf moved | 548 | 22 | 0 | 0 | 570 |
 
-## Layer loss / flattening
+In all four files the top-level content is effectively flattened to one BAZIS content layer (`Слой1`). Standard DXF layer structure therefore cannot be treated as the logical BAZIS view hierarchy.
 
-The tested DXF exposed only three standard layers:
+## Critical revision-tracking discovery: anonymous block names are unstable
 
-- `0`
-- one BAZIS content layer
-- `Defpoints`
+The pair `clean` / `clean, shelf moved` proves that anonymous block names such as `*B12`, `*B21`, etc. are not stable identifiers across exports.
 
-All 688 model-space entities were placed on the same BAZIS content layer.
+The two DXFs have the same number of ordinary INSERTs, but BAZIS renumbered anonymous block definitions after regeneration. Twenty of the twenty-two logical graphic block contents were still geometrically identical, but many of them appeared under different `*Bxx` names.
 
-The paired LDW contains view / layer-related strings that are not reproduced as equivalent standard DXF layer structure. Therefore DXF must not be assumed to preserve the complete BAZIS hierarchy.
+**Consequence:** BasiDraft must never use anonymous DXF block names as persistent view identity.
 
-Possible future strategy:
+View identity must be based on geometry, placement context and BasiDraft's own project identifiers.
 
-- DXF = primary geometry and visible document transport;
-- LDW = optional companion source for BAZIS-specific view/layer metadata where useful;
-- BasiDraft project = authoritative internal structure after import.
+## Verified shelf-change pair
 
-## View / block structure
+After matching block contents by geometry instead of name, only two logical graphic blocks actually changed.
 
-The tested drawing contains useful grouping through INSERT blocks.
+### Large view block
 
-One large block corresponds visually to the main cabinet elevation. Other blocks correspond to graphic groups, detail geometry and hatch-like content. However, one INSERT is not guaranteed to equal one logical BasiDraft view; some logical views are composed from several blocks.
+Clean export:
 
-Therefore view recognition should use block structure as a strong hint, combined with spatial grouping, connectivity, annotation proximity and scale inference.
+- 850 primitives total;
+- 842 LINE;
+- 8 ARC.
 
-## Dimensions
+Changed export:
 
-The tested file contains 77 native DXF DIMENSION entities.
+- 850 primitives total;
+- 842 LINE;
+- 8 ARC.
 
-They are useful, but they are not SolidWorks-style associative dimensions tied to source model entities. No usable DIMASSOC structure was found in the tested export.
+With coordinates quantized to `1e-4` drawing units:
 
-The displayed dimension text is frequently an explicit value while the DXF geometry is drawn at paper scale. Comparing displayed values with measured DXF distances revealed stable scale groups:
+- 847 / 850 primitives match;
+- similarity = `0.99647`;
+- exactly three shelf-related line primitives moved;
+- shelf displacement in the DXF is `+2.772` drawing units in Y.
 
-- 17 dimensions correspond to approximately 1:2 detail geometry;
-- 59 dimensions correspond to approximately 1:13 main-view geometry;
-- one special overridden value was excluded from scale inference.
+Five arc coordinates also changed by roughly `1e-6` drawing units even though their geometry is visually unchanged. This is regeneration noise, not a meaningful revision.
 
-This is very useful: BasiDraft can infer a view scale statistically from nearby imported dimensions even when the scale is not represented as an associative model relationship.
+### Companion block
 
-Imported BAZIS dimensions should therefore be treated as:
+- 18 LINE primitives total;
+- 14 remain unchanged;
+- 4 shelf rectangle lines move by the same `+2.772` drawing units;
+- similarity = `14 / 18 = 0.77777...`.
 
-1. visual/reference annotations;
-2. evidence for recovering view scale;
-3. possible evidence for semantic feature matching;
-4. not trusted as BasiDraft's long-term associative bindings.
+This pair is the first real evidence that a geometry-similarity matcher can recognize a changed BAZIS view without relying on block names.
 
-BasiDraft should create and maintain its own semantic dimension bindings after import.
+## Matching rules derived from the real revision pair
 
-## Hatching
+Revision matching must:
 
-No native HATCH entities were found in the tested DXF. Hatch appearance is exported as groups / blocks containing many short LINE segments.
+- ignore anonymous DXF block names;
+- canonicalize line direction;
+- compare primitive multisets rather than entity order;
+- use a configurable coordinate tolerance;
+- survive tiny regeneration noise;
+- optionally normalize translation so moving a complete view on the sheet does not break identity;
+- return a similarity score rather than a boolean only;
+- explicitly mark ambiguous matches instead of silently choosing the closest candidate.
 
-Therefore DXF preserves hatch appearance but does not necessarily preserve editable hatch semantics.
+A first reusable `ViewMatcher` implementation and regression tests now live in `src/basidraft/geometry/`.
 
-If BasiDraft needs editable / regenerable hatching, hatch regions must be reconstructed from cleaned presentation geometry rather than relying on the exported hatch lines.
+## Useful structure in the simple fixture
 
-## Dirty projected geometry remains a problem
+The simple DXF is valuable because it contains no DIMENSION or TEXT entities and therefore closely represents the intended production input contract.
+
+It contains:
+
+- 22 ordinary INSERTs;
+- only 2 top-level LINEs;
+- 22 anonymous graphic blocks plus model/paper-space blocks.
+
+One block has extents exactly `420 x 297` drawing units, matching an A3 sheet. This is a strong hint for frame/title-block detection, but paper-size recognition must remain heuristic / validated rather than tied to a specific anonymous block name.
+
+## Dimensions and text in annotated fixtures
+
+Annotated DXF samples can still be useful for reverse-engineering and validation, but they are diagnostic material only.
+
+Earlier testing showed that BAZIS can export native DIMENSION and TEXT objects and that dimension values can reveal paper scale statistically. However production BasiDraft logic must not require those annotations because the intended workflow imports geometry without them.
+
+## Hatching and projected geometry
 
 DXF solves the file-format problem, not the visibility / projection problem.
 
-After expanding ordinary INSERT geometry, the tested drawing contained 4,479 line segments, with 4,439 unique exact segments. There were 40 exact duplicate extras across 35 duplicate groups.
+BAZIS can export visually simple views as large collections of fragmented, duplicated or overlapping primitives. Hatching may also appear as many LINE entities instead of native HATCH semantics.
 
-A visually simple main cabinet view alone contained roughly:
-
-- 842 LINE entities;
-- 820 unique exact line segments;
-- 22 exact duplicate extras;
-- hundreds of very short segments.
-
-This confirms the practical observation from BAZIS: model-derived views can contain fragmented, overlapping and otherwise unnecessary projected geometry even though the sheet looks visually correct.
-
-Therefore the BasiDraft geometry pipeline remains:
-
-`DXF raw geometry -> normalization -> visible/presentation geometry -> semantic features -> dimensions / hatch / revision bindings`
+Therefore BasiDraft still needs a geometry-analysis layer that preserves raw input while deriving a cleaned presentation representation.
 
 Normalization must handle at least:
 
@@ -123,40 +135,38 @@ Normalization must handle at least:
 
 ## Real-file comparison versus LDW
 
-The complex real LDW disproved an assumption derived from the minimal LDW fixtures: the byte marker previously used as a provisional entity-stream boundary occurs many times in a real production file. Therefore the current minimal LDW parser is valid only for controlled fixtures and must not be treated as a complete production LDW reader.
+Complex real LDW files disproved assumptions derived from minimal synthetic fixtures: provisional byte markers repeat many times in production files. The minimal LDW parser therefore remains useful for controlled research, not as the primary production geometry path.
 
-This strengthens the decision to use DXF as the primary geometry path while keeping LDW work focused on metadata / fallback research.
-
-## Current recommended import architecture
+This strengthens the architecture:
 
 ### Primary path
 
-`BAZIS -> DXF -> QCAD native entities -> BasiDraft import analysis -> BasiDraft project`
+`BAZIS -> DXF -> QCAD native entities -> BasiDraft analysis -> BasiDraft project`
 
 ### Optional companion path
 
-`BAZIS LDW -> metadata extractor -> merge BAZIS-specific hierarchy / identifiers when confidently decoded`
+`BAZIS LDW -> metadata extractor -> merge only confidently decoded BAZIS-specific metadata`
 
 ### BasiDraft project owns
 
 - logical views;
-- source geometry snapshot;
+- raw source geometry snapshot;
 - cleaned presentation geometry;
-- inferred / confirmed scale;
+- scale / confirmed scale;
 - semantic anchors;
-- BasiDraft dimensions and leaders;
-- revision fingerprints;
+- BasiDraft dimensions, text and leaders;
+- revision fingerprints and geometry-similarity state;
 - ambiguity / review status.
 
 ## Next implementation target
 
-Build a BAZIS DXF analysis layer on top of QCAD's existing DXF importer. It should:
+Build the BAZIS DXF analysis layer on top of QCAD's existing importer:
 
-1. distinguish dimension-owned blocks from normal graphic blocks;
-2. identify sheet frame / title-block geometry;
-3. cluster ordinary geometry into candidate logical views;
-4. infer scale from nearby imported dimensions;
-5. retain raw geometry unchanged;
-6. derive normalized presentation geometry;
-7. expose duplicate / overlap / micro-segment diagnostics;
-8. feed the first automatic overall-dimension workflow from cleaned or user-confirmed view geometry.
+1. discard / quarantine foreign annotations when present;
+2. identify sheet-frame candidates;
+3. collect ordinary graphic blocks and loose geometry;
+4. create geometry snapshots independent of anonymous block names;
+5. normalize duplicates / overlaps / micro-segments;
+6. cluster geometry into candidate logical views;
+7. match those views to previous project versions using tolerant geometry similarity;
+8. feed automatic BasiDraft dimensions from cleaned or user-confirmed view geometry.
