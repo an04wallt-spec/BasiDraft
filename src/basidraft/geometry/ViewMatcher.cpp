@@ -153,18 +153,25 @@ SnapshotSimilarity compareViewSnapshots(
     result.rightPrimitiveCount = primitiveCount(right);
 
     if (options.coordinateTolerance <= 0.0) {
+        result.removedPrimitiveCount = result.leftPrimitiveCount;
+        result.addedPrimitiveCount = result.rightPrimitiveCount;
         return result;
     }
 
     const PrimitiveBag leftBag = makeBag(left, options);
     const PrimitiveBag rightBag = makeBag(right, options);
 
-    for (const auto& [key, leftCount] : leftBag) {
-        const auto it = rightBag.find(key);
+    for (const auto& item : leftBag) {
+        const auto it = rightBag.find(item.first);
         if (it != rightBag.end()) {
-            result.commonPrimitiveCount += std::min(leftCount, it->second);
+            result.commonPrimitiveCount += std::min(item.second, it->second);
         }
     }
+
+    result.removedPrimitiveCount =
+        result.leftPrimitiveCount - result.commonPrimitiveCount;
+    result.addedPrimitiveCount =
+        result.rightPrimitiveCount - result.commonPrimitiveCount;
 
     const std::size_t denominator = std::max(
         result.leftPrimitiveCount,
