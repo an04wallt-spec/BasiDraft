@@ -141,6 +141,54 @@ std::size_t primitiveCount(const ViewSnapshot& snapshot) {
     return snapshot.lines.size() + snapshot.arcs.size() + snapshot.circles.size();
 }
 
+PrimitiveBag subtractBags(const PrimitiveBag& left, const PrimitiveBag& right) {
+    PrimitiveBag result;
+    for (const auto& item : left) {
+        const auto it = right.find(item.first);
+        const std::size_t rightCount = it == right.end() ? 0 : it->second;
+        if (item.second > rightCount) {
+            result[item.first] = item.second - rightCount;
+        }
+    }
+    return result;
+}
+
+bool takeOne(PrimitiveBag& bag, const PrimitiveKey& key) {
+    auto it = bag.find(key);
+    if (it == bag.end() || it->second == 0) {
+        return false;
+    }
+    --it->second;
+    return true;
+}
+
+void appendExcessPrimitives(
+    const ViewSnapshot& source,
+    PrimitiveBag excess,
+    const MatchOptions& options,
+    ViewSnapshot& target) {
+
+    const Bounds bounds = boundsOf(source);
+    const double originX = options.ignoreTranslation && bounds.valid ? bounds.minX : 0.0;
+    const double originY = options.ignoreTranslation && bounds.valid ? bounds.minY : 0.0;
+
+    for (const Line2d& line : source.lines) {
+        if (takeOne(excess, lineKey(line, originX, originY, options.coordinateTolerance))) {
+            target.lines.push_back(line);
+        }
+    }
+    for (const Arc2d& arc : source.arcs) {
+        if (takeOne(excess, arcKey(arc, originX, originY, options.coordinateTolerance))) {
+            target.arcs.push_back(arc);
+        }
+    }
+    for (const Circle2d& circle : source.circles) {
+        if (takeOne(excess, circleKey(circle, originX, originY, options.coordinateTolerance))) {
+            target.circles.push_back(circle);
+        }
+    }
+}
+
 } // namespace
 
 SnapshotSimilarity compareViewSnapshots(
@@ -181,6 +229,41 @@ SnapshotSimilarity compareViewSnapshots(
         ? 0.0
         : static_cast<double>(result.commonPrimitiveCount) /
           static_cast<double>(denominator);
+
+    return result;
+}
+
+SnapshotDiff diffViewSnapshots(
+    const ViewSnapshot& left,
+    const ViewSnapshot& right,
+    const MatchOptions& options) {
+
+    SnapshotDiff result;
+    result.similarity = compareViewSnapshots(left, right, options);
+    result.removed.sourceIndex = left.sourceIndex;
+    result.added.sourceIndex = right.sourceIndex;
+
+    if (options.coordinateTolerance <= 0.0) {
+        result.removed = left;
+        result.added = right;
+        return result;
+    }
+
+    const PrimitiveBag leftBag = makeBag(left, options);
+    const PrimitiveBag rightBag = makeBag(right, options);
+
+    appendExcessPrimitives(
+        left,
+        subtractBags(leftBag, rightBag),
+        options,
+        result.removed
+    );
+    appendExcessPrimitives(
+        right,
+        subtractBags(rightBag, leftBag),
+        options,
+        result.added
+    );
 
     return result;
 }
