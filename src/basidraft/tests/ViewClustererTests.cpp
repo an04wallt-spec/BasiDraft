@@ -30,6 +30,9 @@ bool nearlyEqual(double a, double b, double tolerance = 1.0e-6) {
 int main() {
     ViewClusterOptions options;
     options.proximityTolerance = 1.0e-4;
+    options.mergeContainedIslands = true;
+    options.containmentTolerance = 1.0e-4;
+    options.maximumContainedAreaFraction = 0.25;
     options.minimumHorizontalSpanRatio = 0.80;
     options.maximumCenterOffsetFraction = 0.10;
     options.maximumVerticalGapHeightFraction = 0.75;
@@ -61,6 +64,40 @@ int main() {
         assert(clusters[2].primitiveCount == 543);
         assert(nearlyEqual(clusters[2].box.minY, 39.3176));
         assert(nearlyEqual(clusters[2].box.maxY, 223.5633));
+    }
+
+    // Real furniture sections can contain disconnected hardware that lies
+    // completely inside the section extents. Four boundary segments establish
+    // the outer view island; the small floating element must join that view
+    // without any endpoint contact.
+    {
+        const std::vector<SpatialItem> items = {
+            {100, box(350.0, 40.0, 400.0, 40.0), 1},
+            {101, box(400.0, 40.0, 400.0, 220.0), 1},
+            {102, box(350.0, 220.0, 400.0, 220.0), 1},
+            {103, box(350.0, 40.0, 350.0, 220.0), 1},
+            {104, box(368.0, 155.0, 371.0, 158.0), 90},
+        };
+
+        const auto clusters = basidraft::geometry::clusterLogicalViews(items, options);
+        assert(clusters.size() == 1);
+        assert(clusters[0].sourceIndices.size() == 5);
+        assert(clusters[0].primitiveCount == 94);
+    }
+
+    // A sizeable inset detail should not be silently swallowed simply because it
+    // happens to sit inside a larger view box.
+    {
+        const std::vector<SpatialItem> items = {
+            {110, box(0.0, 0.0, 100.0, 0.0), 1},
+            {111, box(100.0, 0.0, 100.0, 100.0), 1},
+            {112, box(0.0, 100.0, 100.0, 100.0), 1},
+            {113, box(0.0, 0.0, 0.0, 100.0), 1},
+            {114, box(20.0, 20.0, 80.0, 80.0), 20},
+        };
+
+        const auto clusters = basidraft::geometry::clusterLogicalViews(items, options);
+        assert(clusters.size() == 2);
     }
 
     // Side-by-side drawing views with the same vertical span must never be
