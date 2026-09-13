@@ -1,3 +1,4 @@
+#include "geometry/GeometryFingerprint.h"
 #include "ldw/LdwReader.h"
 
 #include <cassert>
@@ -103,6 +104,26 @@ int main() {
         assert(nearlyEqual(line->start.y, 30.0));
         assert(nearlyEqual(line->end.x, 120.0));
         assert(nearlyEqual(line->end.y, 80.0));
+
+        const auto fp = basidraft::geometry::fingerprint(document);
+        assert(fp.lineCount == 1);
+        assert(fp.circleCount == 0);
+        assert(fp.bounds.valid);
+        assert(nearlyEqual(fp.bounds.minX, 20.0));
+        assert(nearlyEqual(fp.bounds.minY, 30.0));
+        assert(nearlyEqual(fp.bounds.maxX, 120.0));
+        assert(nearlyEqual(fp.bounds.maxY, 80.0));
+        assert(nearlyEqual(fp.bounds.width(), 100.0));
+        assert(nearlyEqual(fp.bounds.height(), 50.0));
+        assert(fp.exactHash != 0);
+
+        // Exact fingerprint is independent of a line's drawing direction.
+        auto reversed = document;
+        auto* reversedLine = std::get_if<basidraft::ldw::LineEntity>(&reversed.entities[0].data);
+        assert(reversedLine != nullptr);
+        std::swap(reversedLine->start, reversedLine->end);
+        const auto reversedFp = basidraft::geometry::fingerprint(reversed);
+        assert(reversedFp.exactHash == fp.exactHash);
     }
 
     {
@@ -113,6 +134,14 @@ int main() {
         assert(nearlyEqual(circle->center.x, 0.0));
         assert(nearlyEqual(circle->center.y, 0.0));
         assert(nearlyEqual(circle->radius, 25.0));
+
+        const auto fp = basidraft::geometry::fingerprint(document);
+        assert(fp.circleCount == 1);
+        assert(fp.bounds.valid);
+        assert(nearlyEqual(fp.bounds.minX, -25.0));
+        assert(nearlyEqual(fp.bounds.minY, -25.0));
+        assert(nearlyEqual(fp.bounds.maxX, 25.0));
+        assert(nearlyEqual(fp.bounds.maxY, 25.0));
     }
 
     {
@@ -122,8 +151,13 @@ int main() {
         assert(text != nullptr);
         assert(text->textUtf8 == u8"ТЕСТ123.");
         assert(text->fontUtf8 == "Bahnschrift");
+
+        const auto fp = basidraft::geometry::fingerprint(document);
+        assert(fp.textCount == 1);
+        assert(!fp.bounds.valid); // placement intentionally not guessed yet
+        assert(fp.exactHash != 0);
     }
 
-    std::cout << "BasiDraft LDW reader tests passed\n";
+    std::cout << "BasiDraft LDW reader / geometry tests passed\n";
     return 0;
 }
