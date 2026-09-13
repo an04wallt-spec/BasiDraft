@@ -7,6 +7,8 @@ add_library(basidraft_ldw STATIC
     ldw/LdwReader.h
     geometry/GeometryFingerprint.cpp
     geometry/GeometryFingerprint.h
+    geometry/ViewMatcher.cpp
+    geometry/ViewMatcher.h
 )
 
 target_compile_features(basidraft_ldw PUBLIC cxx_std_17)
