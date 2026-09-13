@@ -42,6 +42,15 @@ jobs:
             -o /tmp/basidraft-geometry-normalizer-tests
       - name: Run geometry normalizer tests
         run: /tmp/basidraft-geometry-normalizer-tests
+      - name: Build logical view clusterer tests
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -pedantic \
+            src/basidraft/geometry/ViewClusterer.cpp \
+            src/basidraft/tests/ViewClustererTests.cpp \
+            -Isrc/basidraft \
+            -o /tmp/basidraft-view-clusterer-tests
+      - name: Run logical view clusterer tests
+        run: /tmp/basidraft-view-clusterer-tests
 
   plugin-build:
     runs-on: ubuntu-latest
