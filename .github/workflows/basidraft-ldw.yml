@@ -180,3 +180,14 @@ jobs:
             tests/fixtures/dxf/basidraft_revision_old_r12.dxf \
             -exec scripts/Developer/BasiDraft/BasiDraftBoundDimensionUpdateSmoke.js \
             -quit
+      - name: Atomically replace DXF source and bound dimension with one-step undo redo
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          ./debug/qcad-bin \
+            -allow-multiple-instances \
+            -no-show \
+            -config /tmp/basidraft-atomic-refresh.ini \
+            tests/fixtures/dxf/basidraft_revision_old_r12.dxf \
+            -exec scripts/Developer/BasiDraft/BasiDraftAtomicRefreshSmoke.js \
+            -quit
