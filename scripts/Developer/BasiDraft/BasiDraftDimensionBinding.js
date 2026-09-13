@@ -1,10 +1,11 @@
 include("scripts/Developer/BasiDraft/BasiDraftRuntimeRevision.js");
+include("scripts/Developer/BasiDraft/BasiDraftOwnership.js");
 
 /**
  * Stores and updates BasiDraft semantic bindings on native QCAD dimensions.
  *
  * The binding is deliberately geometry-based. It does not store DXF block names
- * because BAZIS renumbers anonymous blocks between exports.
+ * because BAZIS renumbers anonymous DXF blocks between exports.
  */
 function BasiDraftDimensionBinding() {
 }
@@ -28,6 +29,7 @@ BasiDraftDimensionBinding.attach = function(entity, binding) {
     if (isNull(entity) || isNull(binding)) {
         return false;
     }
+    BasiDraftOwnership.mark(entity, "Dimension");
     entity.setCustomProperty(
         BasiDraftDimensionBinding.Title,
         BasiDraftDimensionBinding.Key,
@@ -122,7 +124,6 @@ BasiDraftDimensionBinding.plan = function(entity, updateResult, tolerance) {
         return {bound:true, status:"NeedsReview", dx:0, dy:0, binding:binding};
     }
 
-    // A view that remained unchanged requires no dimension mutation.
     if (updateResult.unchangedViews.indexOf(binding.oldViewIndex) !== -1) {
         return {bound:true, status:"Current", dx:0, dy:0, binding:binding};
     }
@@ -146,7 +147,6 @@ BasiDraftDimensionBinding.plan = function(entity, updateResult, tolerance) {
         }
     }
 
-    // The view changed somewhere else: this anchor is still valid.
     if (isNull(removedLine)) {
         return {bound:true, status:"Current", dx:0, dy:0, binding:binding};
     }
@@ -167,7 +167,6 @@ BasiDraftDimensionBinding.plan = function(entity, updateResult, tolerance) {
         return {bound:true, status:"NeedsReview", dx:0, dy:0, binding:binding};
     }
 
-    // Multiple candidates are allowed only if they represent the same motion.
     var dx = candidates[0].dx;
     var dy = candidates[0].dy;
     for (var c=1; c<candidates.length; ++c) {
@@ -201,6 +200,7 @@ BasiDraftDimensionBinding.applyPlan = function(documentInterface, entity, plan) 
     if (plan.status !== "Updated") {
         if (plan.status === "NeedsReview" || plan.status === "Lost") {
             var statusClone = entity.cloneToDimRotatedEntity();
+            BasiDraftOwnership.mark(statusClone, "Dimension");
             statusClone.setCustomProperty(
                 BasiDraftDimensionBinding.Title,
                 BasiDraftDimensionBinding.StatusKey,
@@ -215,6 +215,7 @@ BasiDraftDimensionBinding.applyPlan = function(documentInterface, entity, plan) 
     }
 
     var clone = entity.cloneToDimRotatedEntity();
+    BasiDraftOwnership.mark(clone, "Dimension");
     var binding = plan.binding;
     var p;
     if (binding.endpointIndex === 1) {
@@ -226,8 +227,6 @@ BasiDraftDimensionBinding.applyPlan = function(documentInterface, entity, plan) 
         clone.setExtensionPoint2(new RVector(p.x + plan.dx, p.y + plan.dy, p.z));
     }
 
-    // Advance the stored anchor so subsequent DXF revisions compare against the
-    // geometry that is now current in the document.
     binding.line.x1 += plan.dx;
     binding.line.y1 += plan.dy;
     binding.line.x2 += plan.dx;
