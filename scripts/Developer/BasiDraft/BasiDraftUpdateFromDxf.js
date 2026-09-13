@@ -1,14 +1,15 @@
 include("scripts/Developer/BasiDraft/BasiDraftDxfLoader.js");
 include("scripts/Developer/BasiDraft/BasiDraftRuntimeRevision.js");
+include("scripts/Developer/BasiDraft/BasiDraftDimensionBinding.js");
 
 /**
  * Product-side service for comparing the currently open BasiDraft/QCAD document
  * with a regenerated BAZIS DXF loaded into an isolated in-memory document.
  *
- * This function is intentionally non-destructive: callers receive a complete
- * revision plan first. A later apply stage may update source geometry and bound
- * BasiDraft annotations only after every automatic match has passed the safety
- * policy.
+ * compare() is deliberately non-destructive. applyBoundDimensions() mutates
+ * only BasiDraft-bound native QCAD dimensions whose geometry correspondence is
+ * unambiguous. Ambiguous / lost bindings are marked for review instead of being
+ * silently guessed.
  */
 function BasiDraftUpdateFromDxf() {
 }
@@ -131,4 +132,26 @@ BasiDraftUpdateFromDxf.compare = function(currentDocument, newFileName, options)
                 result.unmatchedOldViews.length === 0 &&
                 result.unmatchedNewViews.length === 0;
     return result;
+};
+
+/**
+ * Applies only dimension-binding changes that passed the revision safety rules.
+ * This deliberately does not replace the imported source geometry yet; source
+ * replacement will be introduced as a separate transaction once view objects
+ * are persisted in the BasiDraft project model.
+ */
+BasiDraftUpdateFromDxf.applyBoundDimensions = function(
+    documentInterface,
+    comparison,
+    tolerance) {
+
+    if (isNull(documentInterface) || isNull(comparison)) {
+        return {updated:0, current:0, needsReview:0, lost:0, unbound:0};
+    }
+
+    return BasiDraftDimensionBinding.applyAll(
+        documentInterface,
+        comparison,
+        tolerance
+    );
 };
