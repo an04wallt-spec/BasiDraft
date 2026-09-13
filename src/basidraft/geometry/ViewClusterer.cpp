@@ -131,12 +131,19 @@ bool shouldMergeContainedIsland(
 
     const double outerArea = outer.box.area();
     const double innerArea = inner.box.area();
-    if (outerArea <= 0.0 || innerArea <= 0.0 || innerArea >= outerArea) {
+    if (outerArea <= 0.0 || innerArea >= outerArea) {
         return false;
     }
 
     if (!boxContains(outer.box, inner.box, options.containmentTolerance)) {
         return false;
+    }
+
+    // Degenerate line / point islands can be legitimate hardware or projection
+    // fragments inside a view. With foreign annotations already quarantined,
+    // full containment is strong enough evidence to keep them with that view.
+    if (innerArea <= 0.0) {
+        return true;
     }
 
     // Do not silently absorb a substantial inset detail / independent view.
