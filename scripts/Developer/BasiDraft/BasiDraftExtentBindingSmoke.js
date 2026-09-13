@@ -11,46 +11,54 @@ var logical = BasiDraftLogicalViews.analyzeLogicalViews(document);
 if (logical.views.length !== 1) {
     throw new Error("Expected exactly one logical view in extent fixture");
 }
-var box = logical.views[0].box;
-if (Math.abs((box.maxX-box.minX)-100.0) > 1.0e-6 ||
-    Math.abs((box.maxY-box.minY)-200.0) > 1.0e-6) {
+var view = logical.views[0];
+if (Math.abs((view.box.maxX-view.box.minX)-100.0) > 1.0e-6 ||
+    Math.abs((view.box.maxY-view.box.minY)-200.0) > 1.0e-6) {
     throw new Error("Old extent fixture must be 100 x 200");
 }
 
-var widthData = new RDimRotatedData();
-widthData.setExtensionPoint1(new RVector(box.minX, box.minY));
-widthData.setExtensionPoint2(new RVector(box.maxX, box.minY));
-widthData.setDefinitionPoint(new RVector((box.minX+box.maxX)*0.5, box.minY-10.0));
-widthData.setRotation(0.0);
-widthData.setLinearFactor(1.0);
+// Exercise the same selection -> logical view identity path used by the user
+// action instead of manufacturing bindings directly in this test.
+document.clearSelection();
+for (var s=0; s<view.entityIds.length; ++s) {
+    document.selectEntity(view.entityIds[s], true);
+}
+if (!document.hasSelection()) {
+    throw new Error("Could not select the logical view geometry");
+}
+var selectionBox = document.getSelectionBox();
+var viewIndex = BasiDraftOverall.findLogicalViewIndex(document, selectionBox);
+if (viewIndex !== 0) {
+    throw new Error("Selected geometry was not identified as logical view 0");
+}
 
-var heightData = new RDimRotatedData();
-heightData.setExtensionPoint1(new RVector(box.minX, box.minY));
-heightData.setExtensionPoint2(new RVector(box.minX, box.maxY));
-heightData.setDefinitionPoint(new RVector(box.minX-10.0, (box.minY+box.maxY)*0.5));
-heightData.setRotation(Math.PI/2.0);
-heightData.setLinearFactor(1.0);
-
-var widthEntity = new RDimRotatedEntity(document, widthData);
-var heightEntity = new RDimRotatedEntity(document, heightData);
-if (!BasiDraftDimensionBinding.attach(
-        widthEntity,
-        BasiDraftDimensionBinding.makeViewExtentBinding(0, "width")) ||
-    !BasiDraftDimensionBinding.attach(
-        heightEntity,
-        BasiDraftDimensionBinding.makeViewExtentBinding(0, "height"))) {
-    throw new Error("Failed to attach view-extent bindings");
+var entities = BasiDraftOverall.createBoundEntities(
+    document,
+    selectionBox,
+    viewIndex,
+    10.0
+);
+if (entities.length !== 2) {
+    throw new Error("Overall action path must create width and height dimensions");
 }
 
 var add = new RAddObjectsOperation();
 add.setText(qsTr("BasiDraft: extent binding smoke dimensions"));
-add.addObject(widthEntity);
-add.addObject(heightEntity);
+for (var a=0; a<entities.length; ++a) {
+    add.addObject(entities[a]);
+}
 di.applyOperation(add);
+document.clearSelection();
 
 var ids = document.queryAllEntities(false, false, RS.EntityDimRotated);
 if (ids.length !== 2) {
     throw new Error("Expected exactly two BasiDraft overall dimensions");
+}
+for (var b=0; b<ids.length; ++b) {
+    var beforeBinding = BasiDraftDimensionBinding.read(document.queryEntity(ids[b]));
+    if (isNull(beforeBinding) || beforeBinding.kind !== "viewExtent") {
+        throw new Error("BasiDraftOverall created an owned dimension without extent binding");
+    }
 }
 
 var oldInfo = new QFileInfo(document.getFileName());
@@ -121,6 +129,6 @@ if (!oldWidthFound) {
 }
 
 print(
-    "BasiDraft extent binding passed: overall width 100 -> 110, height 200 kept, " +
-    "semantic bindings and one-step undo verified"
+    "BasiDraft extent binding passed: selected logical view -> bound overall " +
+    "dimensions, width 100 -> 110, height 200 kept, one-step undo verified"
 );
