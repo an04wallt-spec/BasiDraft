@@ -1,4 +1,5 @@
 include("scripts/Developer/BasiDraft/BasiDraftDxfAnalysis.js");
+include("scripts/Developer/BasiDraft/BasiDraftLogicalViews.js");
 
 var document = EAction.getDocument();
 if (isNull(document)) {
@@ -31,6 +32,9 @@ if (result.frameCandidates[0].primitiveCount !== 4) {
 if (result.blockCandidates.length !== 2) {
     throw new Error("Expected two ordinary block candidates, got " + result.blockCandidates.length);
 }
+if (result.geometryItems.length !== 3) {
+    throw new Error("Expected 3 geometry items after filtering, got " + result.geometryItems.length);
+}
 
 var candidates = {};
 for (var i=0; i<result.blockCandidates.length; ++i) {
@@ -44,4 +48,28 @@ if (isNull(candidates["VIEW_B"]) || candidates["VIEW_B"].primitiveCount !== 5) {
     throw new Error("VIEW_B was not analyzed as a 5-primitive geometry block");
 }
 
-print("BasiDraft DXF analysis smoke passed: frame=1, blocks=2, loose=1, legacy annotations=1");
+var logical = BasiDraftLogicalViews.analyzeLogicalViews(document);
+if (logical.views.length !== 2) {
+    throw new Error("Expected 2 logical views, got " + logical.views.length);
+}
+
+// VIEW_A remains one 5-primitive logical view. VIEW_B absorbs the loose line
+// drawn inside its extents and therefore becomes a 6-primitive logical view.
+if (logical.views[0].primitiveCount !== 5) {
+    throw new Error("Expected first logical view primitive count 5, got " + logical.views[0].primitiveCount);
+}
+if (logical.views[1].primitiveCount !== 6) {
+    throw new Error("Expected second logical view primitive count 6, got " + logical.views[1].primitiveCount);
+}
+if (logical.views[0].snapshot.lines.length !== 5) {
+    throw new Error("Expected first logical snapshot to contain 5 lines");
+}
+if (logical.views[1].snapshot.lines.length !== 6) {
+    throw new Error("Expected second logical snapshot to contain 6 lines");
+}
+if (logical.views[0].snapshot.unsupportedPrimitiveCount !== 0 ||
+    logical.views[1].snapshot.unsupportedPrimitiveCount !== 0) {
+    throw new Error("Synthetic DXF produced unsupported snapshot primitives");
+}
+
+print("BasiDraft DXF runtime passed: frame=1, logical views=2, snapshots=5/6 primitives");
