@@ -156,14 +156,29 @@ int main() {
         assert(nearlyEqual(fp.bounds.width(), 100.0));
         assert(nearlyEqual(fp.bounds.height(), 50.0));
         assert(fp.exactHash != 0);
+        assert(fp.shapeHash != 0);
 
-        // Exact fingerprint is independent of a line's drawing direction.
+        // Exact identity is independent of a line's drawing direction.
         auto reversed = document;
         auto* reversedLine = std::get_if<basidraft::ldw::LineEntity>(&reversed.entities[0].data);
         assert(reversedLine != nullptr);
         std::swap(reversedLine->start, reversedLine->end);
         const auto reversedFp = basidraft::geometry::fingerprint(reversed);
         assert(reversedFp.exactHash == fp.exactHash);
+        assert(reversedFp.shapeHash == fp.shapeHash);
+
+        // Moving a view on a sheet changes exact source coordinates but must not
+        // change its geometric shape identity.
+        auto translated = document;
+        auto* translatedLine = std::get_if<basidraft::ldw::LineEntity>(&translated.entities[0].data);
+        assert(translatedLine != nullptr);
+        translatedLine->start.x += 500.0;
+        translatedLine->start.y -= 200.0;
+        translatedLine->end.x += 500.0;
+        translatedLine->end.y -= 200.0;
+        const auto translatedFp = basidraft::geometry::fingerprint(translated);
+        assert(translatedFp.exactHash != fp.exactHash);
+        assert(translatedFp.shapeHash == fp.shapeHash);
     }
 
     {
@@ -182,6 +197,7 @@ int main() {
         assert(nearlyEqual(fp.bounds.minY, -25.0));
         assert(nearlyEqual(fp.bounds.maxX, 25.0));
         assert(nearlyEqual(fp.bounds.maxY, 25.0));
+        assert(fp.shapeHash != 0);
     }
 
     {
