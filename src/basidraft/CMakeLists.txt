@@ -11,6 +11,8 @@ add_library(basidraft_ldw STATIC
     geometry/ViewMatcher.h
     geometry/GeometryNormalizer.cpp
     geometry/GeometryNormalizer.h
+    geometry/ViewClusterer.cpp
+    geometry/ViewClusterer.h
 )
 
 target_compile_features(basidraft_ldw PUBLIC cxx_std_17)
