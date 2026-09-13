@@ -31,8 +31,8 @@ bool sameUndirectedLine(const Line2d& line,
 int main() {
     NormalizationOptions options;
     options.coordinateTolerance = 1.0e-4;
-    options.mergeGapTolerance = 1.0e-4;
     options.angularTolerance = 1.0e-8;
+    options.microGapTolerance = 1.0e-4;
 
     // Exact duplicates, including reversed drawing direction, are safe to remove.
     {
@@ -48,8 +48,8 @@ int main() {
         assert(sameUndirectedLine(result.lines[0], 0.0, 0.0, 100.0, 0.0));
     }
 
-    // Overlapping and touching collinear fragments are merged into presentation
-    // geometry. This models one common BAZIS projection artifact.
+    // A real overlap may be unioned, but a mere shared endpoint must remain a
+    // semantic joint that later dimensions can still reference.
     {
         const std::vector<Line2d> input = {
             {0.0, 10.0, 40.0, 10.0},
@@ -57,23 +57,30 @@ int main() {
             {60.0, 10.0, 100.0, 10.0},
         };
         const auto result = basidraft::geometry::normalizeLines(input, options);
-        assert(result.stats.collinearMergeCount == 2);
-        assert(result.lines.size() == 1);
-        assert(sameUndirectedLine(result.lines[0], 0.0, 10.0, 100.0, 10.0));
+        assert(result.stats.collinearMergeCount == 1);
+        assert(result.lines.size() == 2);
+        assert(sameUndirectedLine(result.lines[0], 0.0, 10.0, 60.0, 10.0) ||
+               sameUndirectedLine(result.lines[1], 0.0, 10.0, 60.0, 10.0));
+        assert(sameUndirectedLine(result.lines[0], 60.0, 10.0, 100.0, 10.0) ||
+               sameUndirectedLine(result.lines[1], 60.0, 10.0, 100.0, 10.0));
     }
 
-    // A configured micro-gap may be healed, but a larger real gap must survive.
+    // Gap healing is opt-in. With normal production settings the gap survives.
     {
-        NormalizationOptions gapOptions = options;
-        gapOptions.mergeGapTolerance = 0.01;
         const std::vector<Line2d> input = {
             {0.0, 0.0, 10.0, 0.0},
             {10.005, 0.0, 20.0, 0.0},
-            {21.0, 0.0, 30.0, 0.0},
         };
-        const auto result = basidraft::geometry::normalizeLines(input, gapOptions);
-        assert(result.lines.size() == 2);
-        assert(result.stats.collinearMergeCount == 1);
+        const auto conservative = basidraft::geometry::normalizeLines(input, options);
+        assert(conservative.lines.size() == 2);
+        assert(conservative.stats.collinearMergeCount == 0);
+
+        NormalizationOptions healOptions = options;
+        healOptions.healCollinearMicroGaps = true;
+        healOptions.microGapTolerance = 0.01;
+        const auto healed = basidraft::geometry::normalizeLines(input, healOptions);
+        assert(healed.lines.size() == 1);
+        assert(healed.stats.collinearMergeCount == 1);
     }
 
     // Parallel construction lines must never be merged with one another.
@@ -104,7 +111,7 @@ int main() {
     {
         NormalizationOptions keepOptions = options;
         keepOptions.dropDegenerateLines = false;
-        keepOptions.mergeCollinearLines = false;
+        keepOptions.mergeCollinearOverlaps = false;
         const std::vector<Line2d> input = {
             {5.0, 5.0, 5.00001, 5.0},
         };
