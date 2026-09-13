@@ -48,3 +48,31 @@ target_link_libraries(basidraftldw PRIVATE
     qcadentity
     basidraft_ldw
 )
+
+add_executable(basidraft_ldw_integration_test
+    tests/LdwImporterIntegrationTest.cpp
+)
+
+target_include_directories(basidraft_ldw_integration_test PRIVATE
+    ../../../src/core
+    ../../../src/core/math
+    ../../../src/entity
+    ../../../src/io/ldw
+    ../../../src/basidraft
+)
+
+target_compile_definitions(basidraft_ldw_integration_test PRIVATE
+    QCAD_DLL
+)
+
+target_link_libraries(basidraft_ldw_integration_test PRIVATE
+    Qt::Core
+    qcadcore
+    qcadentity
+    basidraftldw
+)
+
+set_target_properties(basidraft_ldw_integration_test PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests
+    FOLDER "BasiDraft"
+)
