@@ -1,15 +1,14 @@
 include("scripts/Developer/BasiDraft/BasiDraftDxfLoader.js");
 include("scripts/Developer/BasiDraft/BasiDraftRuntimeRevision.js");
 include("scripts/Developer/BasiDraft/BasiDraftDimensionBinding.js");
+include("scripts/Developer/BasiDraft/BasiDraftSourceRefresh.js");
 
 /**
  * Product-side service for comparing the currently open BasiDraft/QCAD document
  * with a regenerated BAZIS DXF loaded into an isolated in-memory document.
  *
- * compare() is deliberately non-destructive. applyBoundDimensions() mutates
- * only BasiDraft-bound native QCAD dimensions whose geometry correspondence is
- * unambiguous. Ambiguous / lost bindings are marked for review instead of being
- * silently guessed.
+ * compare() is non-destructive. refresh() performs the complete guarded source
+ * refresh only after the revision and bound-annotation preflight is safe.
  */
 function BasiDraftUpdateFromDxf() {
 }
@@ -122,8 +121,6 @@ BasiDraftUpdateFromDxf.compare = function(currentDocument, newFileName, options)
     result.newLogical = newLogical;
     result.revision = revision;
 
-    // Keep ownership references alive for the caller while it inspects / applies
-    // the revision plan. Nothing is inserted into an MDI window.
     result.temporaryDocument = loaded.document;
     result.temporaryDocumentInterface = loaded.documentInterface;
     result.temporaryStorage = loaded.storage;
@@ -134,12 +131,6 @@ BasiDraftUpdateFromDxf.compare = function(currentDocument, newFileName, options)
     return result;
 };
 
-/**
- * Applies only dimension-binding changes that passed the revision safety rules.
- * This deliberately does not replace the imported source geometry yet; source
- * replacement will be introduced as a separate transaction once view objects
- * are persisted in the BasiDraft project model.
- */
 BasiDraftUpdateFromDxf.applyBoundDimensions = function(
     documentInterface,
     comparison,
@@ -154,4 +145,48 @@ BasiDraftUpdateFromDxf.applyBoundDimensions = function(
         comparison,
         tolerance
     );
+};
+
+/**
+ * Full product update path: compare current source to a hidden regenerated DXF,
+ * preflight all semantic dimension bindings, replace source geometry and update
+ * bound native dimensions in one QCAD transaction group.
+ */
+BasiDraftUpdateFromDxf.refresh = function(
+    documentInterface,
+    newFileName,
+    options) {
+
+    var failed = {
+        comparison:undefined,
+        refresh:{applied:false, error:"No active document"}
+    };
+    if (isNull(documentInterface)) {
+        return failed;
+    }
+
+    var comparison = BasiDraftUpdateFromDxf.compare(
+        documentInterface.getDocument(),
+        newFileName,
+        options
+    );
+    if (!comparison.ok) {
+        return {
+            comparison:comparison,
+            refresh:{applied:false, error:comparison.error}
+        };
+    }
+
+    var tolerance = isNull(options)
+        ? BasiDraftRuntimeRevision.defaultOptions().coordinateTolerance
+        : options.coordinateTolerance;
+
+    return {
+        comparison:comparison,
+        refresh:BasiDraftSourceRefresh.apply(
+            documentInterface,
+            comparison,
+            tolerance
+        )
+    };
 };
