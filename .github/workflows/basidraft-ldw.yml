@@ -32,6 +32,16 @@ jobs:
             -o /tmp/basidraft-view-matcher-tests
       - name: Run view revision matcher tests
         run: /tmp/basidraft-view-matcher-tests
+      - name: Build geometry normalizer tests
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -pedantic \
+            src/basidraft/geometry/ViewMatcher.cpp \
+            src/basidraft/geometry/GeometryNormalizer.cpp \
+            src/basidraft/tests/GeometryNormalizerTests.cpp \
+            -Isrc/basidraft \
+            -o /tmp/basidraft-geometry-normalizer-tests
+      - name: Run geometry normalizer tests
+        run: /tmp/basidraft-geometry-normalizer-tests
 
   plugin-build:
     runs-on: ubuntu-latest
