@@ -1,0 +1,57 @@
+name: Bootstrap from QCAD Community Edition
+
+on:
+  push:
+    paths:
+      - '.github/workflows/bootstrap-qcad.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  import-upstream:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout BasiDraft
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Import exact QCAD 3.33.1 upstream history
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git remote get-url upstream >/dev/null 2>&1; then
+            git remote set-url upstream https://github.com/qcad/qcad.git
+          else
+            git remote add upstream https://github.com/qcad/qcad.git
+          fi
+
+          # This upstream commit reports R_QCAD_VERSION_STRING as 3.33.1.
+          QCAD_COMMIT="1bf8d0c6f83b7bb034cfd62b7346255370b9ddca"
+          git fetch upstream "$QCAD_COMMIT" --no-tags
+          git merge --allow-unrelated-histories -X theirs "$QCAD_COMMIT" \
+            -m "Import QCAD Community Edition 3.33.1 upstream"
+
+          cat > BASIDRAFT.md <<'EOF'
+          # BasiDraft
+
+          BasiDraft is developed directly from the QCAD Community Edition source tree.
+
+          Upstream baseline: qcad/qcad commit 1bf8d0c6f83b7bb034cfd62b7346255370b9ddca (QCAD 3.33.1).
+
+          Development principles:
+          - keep the original CAD core and modify it directly rather than rebuilding a separate clone;
+          - Windows x64 is the primary target;
+          - Russian is the primary UI language;
+          - preserve upstream GPLv3 and all third-party license notices;
+          - first obtain a reproducible clean build, then simplify the UI and add BasiDraft automation.
+          EOF
+
+          git add BASIDRAFT.md .github/workflows/bootstrap-qcad.yml
+          git commit -m "Add BasiDraft project notes" || true
+          git push origin HEAD:main
