@@ -68,8 +68,8 @@ int main() {
 
     // Real furniture sections can contain disconnected hardware that lies
     // completely inside the section extents. Four boundary segments establish
-    // the outer view island; the small floating element must join that view
-    // without any endpoint contact.
+    // the outer view island; both a floating hardware box and a degenerate tiny
+    // segment must join that view without any endpoint contact.
     {
         const std::vector<SpatialItem> items = {
             {100, box(350.0, 40.0, 400.0, 40.0), 1},
@@ -77,12 +77,13 @@ int main() {
             {102, box(350.0, 220.0, 400.0, 220.0), 1},
             {103, box(350.0, 40.0, 350.0, 220.0), 1},
             {104, box(368.0, 155.0, 371.0, 158.0), 90},
+            {105, box(374.0413, 155.8687, 374.0426, 155.8687), 1},
         };
 
         const auto clusters = basidraft::geometry::clusterLogicalViews(items, options);
         assert(clusters.size() == 1);
-        assert(clusters[0].sourceIndices.size() == 5);
-        assert(clusters[0].primitiveCount == 94);
+        assert(clusters[0].sourceIndices.size() == 6);
+        assert(clusters[0].primitiveCount == 95);
     }
 
     // A sizeable inset detail should not be silently swallowed simply because it
