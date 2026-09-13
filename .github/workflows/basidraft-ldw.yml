@@ -62,7 +62,20 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: |
           ./debug/qcad-bin \
-            -no-gui \
+            -allow-multiple-instances \
             -no-show \
+            -config /tmp/basidraft-smoke.ini \
             -exec scripts/Developer/BasiDraft/BasiDraftScriptSmoke.js \
+            -quit
+      - name: Verify real BAZIS LDW to automatic dimensions end-to-end
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          ./debug/qcad-bin \
+            -allow-multiple-instances \
+            -no-show \
+            -config /tmp/basidraft-e2e.ini \
+            -filter "BAZIS LDW (*.ldw)" \
+            tests/fixtures/ldw/line_diagonal_100x50.ldw \
+            -exec scripts/Developer/BasiDraft/BasiDraftLdwEndToEnd.js \
             -quit
