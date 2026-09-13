@@ -5,6 +5,8 @@ project(basidraft_core VERSION 0.1 LANGUAGES CXX)
 add_library(basidraft_ldw STATIC
     ldw/LdwReader.cpp
     ldw/LdwReader.h
+    geometry/GeometryFingerprint.cpp
+    geometry/GeometryFingerprint.h
 )
 
 target_compile_features(basidraft_ldw PUBLIC cxx_std_17)
