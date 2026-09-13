@@ -1,0 +1,36 @@
+name: BasiDraft foreign annotation guard
+
+on:
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: basidraft-foreign-annotation-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  nested-annotation-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Qt 6 dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake ninja-build g++ \
+            qt6-base-dev qt6-declarative-dev qt6-svg-dev
+      - name: Configure QCAD / BasiDraft
+        run: cmake -S . -B build -G Ninja -DBUILD_QT6=ON
+      - name: Build QCAD and DXF importer
+        run: cmake --build build --target qcad qcaddxf basidraftldw --parallel 2
+      - name: Reject annotation nested inside regenerated DXF block
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          ./debug/qcad-bin \
+            -allow-multiple-instances \
+            -no-show \
+            -config /tmp/basidraft-nested-annotation.ini \
+            tests/fixtures/dxf/basidraft_extent_old_r12.dxf \
+            -exec scripts/Developer/BasiDraft/BasiDraftNestedAnnotationGuardSmoke.js \
+            -quit
