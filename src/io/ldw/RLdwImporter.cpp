@@ -28,6 +28,11 @@ void tagImportedEntity(const QSharedPointer<REntity>& entity,
     );
     entity->setCustomProperty(
         "BasiDraft",
+        "SourceShapeHash",
+        QString::number(static_cast<qulonglong>(sourceFingerprint.shapeHash))
+    );
+    entity->setCustomProperty(
+        "BasiDraft",
         "SourceOffset",
         QString::number(static_cast<qulonglong>(sourceEntity.fileOffset))
     );
