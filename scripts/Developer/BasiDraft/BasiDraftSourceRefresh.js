@@ -86,9 +86,6 @@ BasiDraftSourceRefresh.apply = function(documentInterface, comparison, tolerance
         return result;
     }
 
-    // Production import contract: BAZIS supplies geometry. BasiDraft owns all
-    // annotations. Refuse a regenerated source that unexpectedly brings its own
-    // dimensions / text / leaders / hatches instead of silently importing them.
     if (!isNull(comparison.newLogical) &&
         !isNull(comparison.newLogical.analysis) &&
         comparison.newLogical.analysis.foreignAnnotationCount !== 0) {
@@ -125,7 +122,6 @@ BasiDraftSourceRefresh.apply = function(documentInterface, comparison, tolerance
         document.setAutoTransactionGroup(true);
         mutationStarted = true;
 
-        // 1. Remove only non-BasiDraft model-space entities from the old source.
         var del = new RDeleteObjectsOperation();
         del.setText(qsTr("BasiDraft: удалить старую DXF-геометрию"));
         for (var d=0; d<sourceEntities.length; ++d) {
@@ -137,8 +133,6 @@ BasiDraftSourceRefresh.apply = function(documentInterface, comparison, tolerance
         }
         result.removedSourceEntityCount = sourceEntities.length;
 
-        // 2. Paste regenerated source into model space. RPasteOperation copies
-        // required layers / blocks together with their references.
         document.setCurrentBlock(document.getModelSpaceBlockId());
         var paste = new RPasteOperation(comparison.temporaryDocument);
         paste.setOverwriteLayers(true);
@@ -150,8 +144,6 @@ BasiDraftSourceRefresh.apply = function(documentInterface, comparison, tolerance
             throw new Error("Failed to paste regenerated DXF source geometry");
         }
 
-        // 3. Move only semantic dimension anchors that were proven to follow
-        // the localized model revision.
         var dimensionStats = BasiDraftDimensionBinding.applyAll(
             documentInterface,
             comparison,
@@ -169,17 +161,12 @@ BasiDraftSourceRefresh.apply = function(documentInterface, comparison, tolerance
     }
     finally {
         document.setAutoTransactionGroup(oldAutoGroup);
-        if (document.isBlockIdValid && document.isBlockIdValid(oldCurrentBlockId)) {
-            document.setCurrentBlock(oldCurrentBlockId);
-        }
-        else {
-            document.setCurrentBlock(document.getModelSpaceBlockId());
-        }
+        // Source refresh deletes only entities, never the current block object.
+        // Therefore the previous current block ID remains valid.
+        document.setCurrentBlock(oldCurrentBlockId);
     }
 
     if (!result.applied && mutationStarted) {
-        // Roll back every transaction made after the tag. This preserves the
-        // original drawing even if a lower-level QCAD operation fails midway.
         documentInterface.undoToTag(tag);
         result.removedSourceEntityCount = 0;
         result.dimensionStats = undefined;
