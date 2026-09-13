@@ -1,27 +1,22 @@
-# BasiDraft
+QCAD - The Open Source 2D CAD
+=============================
 
-BasiDraft is a personal Windows 2D drafting application based directly on the open-source QCAD Community Edition codebase.
+QCAD is a 2D CAD solution for Windows, macOS and Linux. Its core is developed in C++, based on the Qt tool kit.
+QCAD can be extended through a C++ plugin interface as well as through its very powerful and complete scripting 
+interface (ECMAScript/JavaScript).
 
-## Base
+History
+-------
+QCAD started as version 1 in October 1999 and has since evolved through version 2 (September 2003) 
+and the current version 3 (July 2012 to present).
 
-- Upstream: `qcad/qcad`
-- Target baseline: QCAD Community Edition 3.33.1
-- Platform: Windows x64
-- Purpose: a simplified, Russian-first drafting environment with strong automation for generating and dimensioning production drawings.
+License
+-------
+The QCAD 3 source code is released under the GPLv3 open source license. Script add-ons and C++ plugins 
+are released under their respective licenses.
 
-## Development rule
+Compilation
+-----------
+Detailed compilation instructions for Windows, macOS and Linux can be found on our web site at:
 
-We modify the original QCAD codebase directly. We do not build a separate CAD engine "inspired by" QCAD.
-
-## Planned first stage
-
-1. Import the official QCAD Community Edition source tree.
-2. Confirm a clean Windows x64 build.
-3. Keep and verify the Russian locale.
-4. Establish BasiDraft branding without removing required upstream license notices.
-5. Reduce the interface to the tools needed for the target workflow.
-6. Add project-specific automation incrementally on top of the working CAD base.
-
-## License
-
-QCAD Community Edition source is distributed under GPLv3 with its published exceptions and third-party licenses. BasiDraft will retain the upstream license files and notices.
+http://www.qcad.org/en/component/content/article/78-qcad/111-qcad-compilation-from-sources

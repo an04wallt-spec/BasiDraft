@@ -1,0 +1,222 @@
+<?xml version="1.0"?>
+<unit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+xmlns:rs="http://www.ribbonsoft.com">
+  <class_decl name="QFrame" />
+  <class_decl name="QGestureEvent" />
+  <class_decl name="RGraphicsViewImage" />
+  <class name="RGraphicsViewQt"
+  xsi:noNamespaceSchemaLocation="../class.xsd" isCopyable="false"
+  hasShell="true" sharedPointerSupport="false" isQObject="true"
+  hasStreamOperator="false" isAbstract="false" isScriptable="true">
+    <baseClass name="QWidget" specifier="public" />
+    <constructor>
+      <variant>
+        <arg type="QWidget *" typeName="QWidget *" name="parent"
+        hasDefault="true" default="NULL" isConst="false" />
+        <arg type="bool" typeName="bool" name="showFocus"
+        hasDefault="true" default="true" isConst="false" />
+      </variant>
+    </constructor>
+    <method name="setImageView" cppName="setImageView"
+    specifier="public" isStatic="false" isVirtual="false"
+    isScriptOverwritable="true">
+      <variant returnType="void" isPureVirtual="false">
+        <arg type="RGraphicsViewImage *"
+        typeName="RGraphicsViewImage *" name="v" isConst="false" />
+      </variant>
+    </method>
+    <method name="getImageView" cppName="getImageView"
+    specifier="public" isStatic="false" isVirtual="false"
+    isScriptOverwritable="true">
+      <variant returnType="RGraphicsViewImage *"
+      isPureVirtual="false" />
+    </method>
+    <method name="disableGestures" cppName="disableGestures"
+    specifier="public" isStatic="false" isVirtual="false"
+    isScriptOverwritable="true">
+      <variant returnType="void" isPureVirtual="false" />
+    </method>
+    <method name="removeFocus" cppName="removeFocus"
+    specifier="public" isStatic="false" isVirtual="true"
+    isScriptOverwritable="true">
+      <variant returnType="void" isPureVirtual="false" />
+    </method>
+    <method name="getWidth" cppName="getWidth" specifier="public"
+    isStatic="false" isVirtual="true" isScriptOverwritable="true">
+      <variant returnType="int" isPureVirtual="false" />
+    </method>
+    <method name="getHeight" cppName="getHeight" specifier="public"
+    isStatic="false" isVirtual="true" isScriptOverwritable="true">
+      <variant returnType="int" isPureVirtual="false" />
+    </method>
+    <method name="getRect" cppName="getRect" specifier="public"
+    isStatic="false" isVirtual="true" isScriptOverwritable="true">
+      <variant returnType="QRect" isPureVirtual="false" />
+    </method>
+    <method name="getSignalsBlocked" cppName="getSignalsBlocked"
+    specifier="public" isStatic="false" isVirtual="true"
+    isScriptOverwritable="true">
+      <variant returnType="bool" isPureVirtual="false" />
+    </method>
+    <method name="setSignalsBlocked" cppName="setSignalsBlocked"
+    specifier="public" isStatic="false" isVirtual="true"
+    isScriptOverwritable="true">
+      <variant returnType="void" isPureVirtual="false">
+        <arg type="bool" typeName="bool" name="on"
+        isConst="false" />
+      </variant>
+    </method>
+    <method name="setFocusFrameWidget"
+    cppName="setFocusFrameWidget" specifier="public"
+    isStatic="false" isVirtual="false" isScriptOverwritable="true">
+      <variant returnType="void" isPureVirtual="false">
+        <arg type="QFrame *" typeName="QFrame *" name="w"
+        isConst="false" />
+      </variant>
+    </method>
+    <method name="simulateMouseMoveEvent"
+    cppName="simulateMouseMoveEvent" specifier="public"
+    isStatic="false" isVirtual="true" isScriptOverwritable="true">
+      <variant returnType="void" isPureVirtual="false" />
+    </method>
+    <method name="sizeHint" cppName="sizeHint" specifier="public"
+    isStatic="false" isVirtual="true" isScriptOverwritable="true">
+      <variant returnType="QSize" isPureVirtual="false" />
+    </method>
+    <method name="event" cppName="event" specifier="protected"
+    isStatic="false" isVirtual="false" isScriptOverwritable="true">
+      <variant returnType="bool" isPureVirtual="false">
+        <arg type="QEvent *" typeName="QEvent *" name="e"
+        isConst="false" />
+      </variant>
+    </method>
+    <method name="gestureEvent" cppName="gestureEvent"
+    specifier="protected" isStatic="false" isVirtual="false"
+    isScriptOverwritable="true">
+      <variant returnType="bool" isPureVirtual="false">
+        <arg type="QGestureEvent *" typeName="QGestureEvent *"
+        name="event" isConst="false" />
+      </variant>
+    </method>
+    <method name="focusInEvent" cppName="focusInEvent"
+    specifier="protected" isStatic="false" isVirtual="true"
+    isScriptOverwritable="true">
+      <variant returnType="void" isPureVirtual="false">
+        <arg type="QFocusEvent *" typeName="QFocusEvent *"
+        name="event" isConst="false" />
+      </variant>
+    </method>
+    <method name="focusOutEvent" cppName="focusOutEvent"
+    specifier="protected" isStatic="false" isVirtual="true"
+    isScriptOverwritable="true">
+      <variant returnType="void" isPureVirtual="false">
+        <arg type="QFocusEvent *" typeName="QFocusEvent *"
+        name="event" isConst="false" />
+      </variant>
+    </method>
+    <method name="tabletEvent" cppName="tabletEvent"
+    specifier="protected" isStatic="false" isVirtual="true"
+    isScriptOverwritable="true">
+      <variant returnType="void" isPureVirtual="false">
+        <arg type="QTabletEvent *" typeName="QTabletEvent *"
+        name="event" isConst="false" />
+      </variant>
+    </method>
+    <method name="mouseMoveEvent" cppName="mouseMoveEvent"
+    specifier="protected" isStatic="false" isVirtual="true"
+    isScriptOverwritable="true">
+      <variant returnType="void" isPureVirtual="false">
+        <arg type="QMouseEvent *" typeName="QMouseEvent *"
+        name="event" isConst="false" />
+      </variant>
+    </method>
+    <method name="mousePressEvent" cppName="mousePressEvent"
+    specifier="protected" isStatic="false" isVirtual="true"
+    isScriptOverwritable="true">
+      <variant returnType="void" isPureVirtual="false">
+        <arg type="QMouseEvent *" typeName="QMouseEvent *"
+        name="event" isConst="false" />
+      </variant>
+    </method>
+    <method name="mouseReleaseEvent" cppName="mouseReleaseEvent"
+    specifier="protected" isStatic="false" isVirtual="true"
+    isScriptOverwritable="true">
+      <variant returnType="void" isPureVirtual="false">
+        <arg type="QMouseEvent *" typeName="QMouseEvent *"
+        name="event" isConst="false" />
+      </variant>
+    </method>
+    <method name="mouseDoubleClickEvent"
+    cppName="mouseDoubleClickEvent" specifier="protected"
+    isStatic="false" isVirtual="true" isScriptOverwritable="true">
+      <variant returnType="void" isPureVirtual="false">
+        <arg type="QMouseEvent *" typeName="QMouseEvent *"
+        name="event" isConst="false" />
+      </variant>
+    </method>
+    <method name="wheelEvent" cppName="wheelEvent"
+    specifier="protected" isStatic="false" isVirtual="true"
+    isScriptOverwritable="true">
+      <variant returnType="void" isPureVirtual="false">
+        <arg type="QWheelEvent *" typeName="QWheelEvent *"
+        name="event" isConst="false" />
+      </variant>
+    </method>
+    <method name="paintEvent" cppName="paintEvent"
+    specifier="protected" isStatic="false" isVirtual="true"
+    isScriptOverwritable="true">
+      <variant returnType="void" isPureVirtual="false">
+        <arg type="QPaintEvent *" typeName="QPaintEvent *" name=""
+        isConst="false" />
+      </variant>
+    </method>
+    <method name="resizeEvent" cppName="resizeEvent"
+    specifier="protected" isStatic="false" isVirtual="true"
+    isScriptOverwritable="true">
+      <variant returnType="void" isPureVirtual="false">
+        <arg type="QResizeEvent *" typeName="QResizeEvent *"
+        name="event" isConst="false" />
+      </variant>
+    </method>
+    <method name="keyPressEvent" cppName="keyPressEvent"
+    specifier="protected" isStatic="false" isVirtual="true"
+    isScriptOverwritable="true">
+      <variant returnType="void" isPureVirtual="false">
+        <arg type="QKeyEvent *" typeName="QKeyEvent *" name="event"
+        isConst="false" />
+      </variant>
+    </method>
+    <method name="keyReleaseEvent" cppName="keyReleaseEvent"
+    specifier="protected" isStatic="false" isVirtual="true"
+    isScriptOverwritable="true">
+      <variant returnType="void" isPureVirtual="false">
+        <arg type="QKeyEvent *" typeName="QKeyEvent *" name="event"
+        isConst="false" />
+      </variant>
+    </method>
+    <method name="dragEnterEvent" cppName="dragEnterEvent"
+    specifier="protected" isStatic="false" isVirtual="true"
+    isScriptOverwritable="true">
+      <variant returnType="void" isPureVirtual="false">
+        <arg type="QDragEnterEvent *" typeName="QDragEnterEvent *"
+        name="event" isConst="false" />
+      </variant>
+    </method>
+    <method name="dropEvent" cppName="dropEvent"
+    specifier="protected" isStatic="false" isVirtual="true"
+    isScriptOverwritable="true">
+      <variant returnType="void" isPureVirtual="false">
+        <arg type="QDropEvent *" typeName="QDropEvent *"
+        name="event" isConst="false" />
+      </variant>
+    </method>
+    <method name="focusNextPrevChild" cppName="focusNextPrevChild"
+    specifier="protected" isStatic="false" isVirtual="true"
+    isScriptOverwritable="true">
+      <variant returnType="bool" isPureVirtual="false">
+        <arg type="bool" typeName="bool" name="next"
+        isConst="false" />
+      </variant>
+    </method>
+  </class>
+</unit>

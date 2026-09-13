@@ -1,0 +1,841 @@
+/**
+ * Copyright (c) 2011-2018 by Andrew Mustun. All rights reserved.
+ * 
+ * This file is part of the QCAD project.
+ *
+ * QCAD is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * QCAD is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with QCAD.
+ */
+
+include("scripts/Widgets/Widgets.js");
+include("scripts/WidgetFactory.js");
+
+/**
+ * Block list widget class (QWidget).
+ */
+function RBlockListQt(parent, addListener, showHeader) {
+    RTreeWidget.call(this, parent);
+
+    if (isNull(addListener)) {
+        addListener = true;
+    }
+    if (isNull(showHeader)) {
+        showHeader = false;
+    }
+
+    this.di = undefined;
+
+    if (!showHeader) {
+        this.header().close();
+    }
+    this.iconSize = new QSize(16, 16);
+    this.indentation = 0;
+    this.rootIsDecorated = false;
+
+    this.setSelectableColumn(2);
+
+    this.columnCount = 3;
+
+    this.header().stretchLastSection = false;
+    if (RSettings.isQt(5)) {
+        this.header().minimumSectionSize = 22;
+        this.header().setSectionResizeMode(BlockList.colName, QHeaderView.Stretch);
+        this.header().setSectionResizeMode(BlockList.colVisible, QHeaderView.Interactive);
+        this.header().setSectionResizeMode(BlockList.colEdit, QHeaderView.Interactive);
+        //this.header().setSectionResizeMode(BlockList.colXRef, QHeaderView.Interactive);
+    }
+    else {
+        this.header().setResizeMode(BlockList.colName, QHeaderView.Stretch);
+        this.header().setResizeMode(BlockList.colVisible, QHeaderView.Interactive);
+        this.header().setResizeMode(BlockList.colEdit, QHeaderView.Interactive);
+        //this.header().setResizeMode(BlockList.colXRef, QHeaderView.Interactive);
+    }
+
+    // Qt 6.6.1 workaround: this only works once widget is visible:
+    // for tests, we also need it here:
+    BlockList.initColumnWidths(this);
+
+    var self = this;
+    if (addListener) {
+        var appWin = EAction.getMainWindow();
+        var adapter = new RBlockListenerAdapter();
+        appWin.addBlockListener(adapter);
+        adapter.blocksUpdated.connect(function(di) { self.updateBlocks(di); });
+        adapter.xRefUpdated.connect(function() { self.updateXRef(); });
+        adapter.currentBlockSet.connect(function(di) { self.updateCurrentBlock(di); });
+        adapter.blocksCleared.connect(function() { self.clearBlocks(); });
+    }
+
+    this.itemDoubleClicked.connect(function(item, col) { self.editBlock(item, col); });
+    this.itemColumnClicked.connect(function(item, col) { self.itemColumnClickedSlot(item, col); });
+    this.itemSelectionChanged.connect(function() { self.blockActivated(); });
+    this.basePath = includeBasePath;
+
+    this.currentBlockItem = undefined;
+
+    this.installEventFilter(new RToolOptionEventFilter(this));
+}
+
+RBlockListQt.prototype = new RTreeWidget();
+
+RBlockListQt.getWidget = function() {
+    var appWin = EAction.getMainWindow();
+    return appWin.findChild("BlockList");
+};
+
+/**
+ * Add an additional action to be used in the context menu.
+ * Can be used by plugins to hook into the block list context menu.
+ */
+RBlockListQt.addContextMenuScriptFile = function(scriptFile, blockList, xRefOnly) {
+    //var blockList = RBlockListQt.getWidget();
+    if (isNull(blockList)) {
+        return;
+    }
+    if (isNull(xRefOnly)) {
+        xRefOnly=false;
+    }
+
+    var scriptFiles = RBlockListQt.getContextMenuScriptFiles(blockList);
+    var scriptFileXRefOnly = RBlockListQt.getContextMenuScriptFileXRefOnly(blockList);
+    scriptFiles.push(scriptFile);
+    scriptFileXRefOnly.push(xRefOnly);
+    blockList.setProperty("ContextMenuScriptFiles", scriptFiles);
+    blockList.setProperty("ContextMenuScriptFileXRefOnly", scriptFileXRefOnly);
+};
+
+RBlockListQt.getContextMenuScriptFiles = function(blockList) {
+    //var blockList = RBlockListQt.getWidget();
+    if (isNull(blockList)) {
+        return [];
+    }
+
+    var scriptFiles = blockList.property("ContextMenuScriptFiles");
+    if (isNull(scriptFiles)) {
+        scriptFiles = [];
+    }
+    return scriptFiles;
+};
+
+RBlockListQt.getContextMenuScriptFileXRefOnly = function(blockList) {
+    //var blockList = RBlockListQt.getWidget();
+    if (isNull(blockList)) {
+        return [];
+    }
+
+    var scriptFileXRefOnly = blockList.property("ContextMenuScriptFileXRefOnly");
+    if (isNull(scriptFileXRefOnly)) {
+        scriptFileXRefOnly = [];
+    }
+    return scriptFileXRefOnly;
+};
+
+RBlockListQt.prototype.contextMenuEvent = function(e) {
+    var item = this.itemAt(e.pos());
+    if (!isNull(item)) {
+        this.setCurrentItem(item);
+    }
+
+    var document = this.di.getDocument();
+    var blockName = this.getBlockName(item);
+    var block = document.queryBlockDirect(blockName);
+    var isXRef = false;
+    if (!isNull(block)) {
+        isXRef = block.isXRef();
+    }
+
+    var menu = new QMenu();
+
+    RGuiAction.getByScriptFile("scripts/Block/ToggleBlockVisibility/ToggleBlockVisibility.js").addToMenu(menu);
+    RGuiAction.getByScriptFile("scripts/Block/ShowAllBlocks/ShowAllBlocks.js").addToMenu(menu);
+    RGuiAction.getByScriptFile("scripts/Block/HideAllBlocks/HideAllBlocks.js").addToMenu(menu);
+    RGuiAction.getByScriptFile("scripts/Block/AddBlock/AddBlock.js").addToMenu(menu);
+    RGuiAction.getByScriptFile("scripts/Block/RemoveBlock/RemoveBlock.js").addToMenu(menu);
+    RGuiAction.getByScriptFile("scripts/Block/RenameBlock/RenameBlock.js").addToMenu(menu);
+    RGuiAction.getByScriptFile("scripts/Block/EditBlock/EditBlock.js").addToMenu(menu);
+    RGuiAction.getByScriptFile("scripts/Block/InsertBlock/InsertBlock.js").addToMenu(menu);
+    RGuiAction.getByScriptFile("scripts/Block/SelectBlockReferences/SelectBlockReferences.js").addToMenu(menu);
+    RGuiAction.getByScriptFile("scripts/Block/DeselectBlockReferences/DeselectBlockReferences.js").addToMenu(menu);
+
+    RBlockListQt.complementContextMenu(menu, RBlockListQt.getWidget(), isXRef);
+
+    menu.exec(QCursor.pos());
+
+    e.ignore();
+};
+
+RBlockListQt.complementContextMenu = function(menu, blockListWidget, isXRef) {
+    if (isNull(isXRef)) {
+        isXRef = false;
+    }
+
+    // add additional context menu actions provided by plugins:
+    var scriptFiles = RBlockListQt.getContextMenuScriptFiles(blockListWidget);
+    var scriptFileXRefOnly = RBlockListQt.getContextMenuScriptFileXRefOnly(blockListWidget);
+    for (var i=0; i<scriptFiles.length && i<scriptFileXRefOnly.length; i++) {
+        var scriptFile = scriptFiles[i];
+        var xRefOnly = scriptFileXRefOnly[i];
+
+        if (xRefOnly && !isXRef) {
+            // menu not applicable for non-XRef blocks:
+            continue;
+        }
+
+        var a = RGuiAction.getByScriptFile(scriptFile);
+        if (!isNull(a)) {
+            a.addToMenu(menu);
+        }
+    }
+};
+
+RBlockListQt.prototype.filter = function(block) {
+    var hideInternal = RSettings.getBoolValue("BlockList/HideInternalBlocks", false);
+
+    if (hideInternal===true) {
+        var blockNameLower = block.getName().toLowerCase();
+
+        // hide anonymous blocks:
+        if (blockNameLower.startsWith("a$c") &&
+            blockNameLower.length===13) {
+            return false;
+        }
+
+        // hide blocks tagged as resources
+        // such blocks may be added by add-ons to provide
+        // additional resources such as CAM tools, etc.
+        if (block.hasCustomProperty("QCAD", "ResourceFlag")) {
+            return false;
+        }
+    }
+    return true;
+};
+
+RBlockListQt.prototype.updateCurrentBlock = function(documentInterface) {
+    if (BlockList.iconVisible.length===0) {
+        BlockList.initStyle();
+    }
+
+    var doc = documentInterface.getDocument();
+
+    // find item which was representing the current block before:
+    if (!isNull(this.currentBlockItem)) {
+        // clear pen icon from item:
+        //var blockName = this.currentBlockItem.data(BlockList.colName, Qt.UserRole);
+        //var block = doc.queryBlock(blockName);
+        //this.updateItemIcons(this.currentBlockItem, block);
+        this.currentBlockItem.setIcon(BlockList.colEdit, BlockList.iconEdit[0]);
+    }
+
+    // find item of current block:
+    this.currentBlockItem = RBlockListQt.getItem(this, doc.getCurrentBlockName());
+    //for (var i=0; i<this.topLevelItemCount; i++) {
+    //    var item = this.topLevelItem(i);
+    //}
+
+    // add pen icon to item:
+    if (!isNull(this.currentBlockItem)) {
+        this.currentBlockItem.setIcon(BlockList.colEdit, BlockList.iconEdit[1]);
+    }
+};
+
+/**
+ * Called when the XRef status of the current block changes. Updates the XRef icon.
+ */
+RBlockListQt.prototype.updateXRef = function() {
+    if (isNull(this.di)) {
+        return;
+    }
+
+    if (BlockList.iconVisible.length===0) {
+        BlockList.initStyle();
+    }
+
+    var doc = this.di.getDocument();
+
+    // find item of current block:
+    var item = RBlockListQt.getItem(this, doc.getCurrentBlockName());
+
+    // update XRef icon for item:
+    if (!isNull(item)) {
+        var block = doc.queryCurrentBlock();
+        var isXRef = false;
+        var isFromXRef = false;
+        if (!isNull(block)) {
+            // block is XRef:
+            isXRef = block.isXRef();
+            // block is a block that lives inside an XRef:s
+            isFromXRef = block.isFromXRef();
+        }
+
+        if (isXRef) {
+            item.setIcon(BlockList.colEdit, BlockList.iconXRef[Number(isXRef)]);
+        }
+        else if (isFromXRef) {
+            item.setIcon(BlockList.colEdit, BlockList.iconFromXRef[Number(isFromXRef)]);
+        }
+    }
+};
+
+/**
+ * Called when blocks are added, edited or deleted. Updates the block list.
+ */
+RBlockListQt.prototype.updateBlocks = function(documentInterface) {
+    this.currentBlockItem = undefined;
+
+    this.di = documentInterface;
+
+    var pos = this.verticalScrollBar().sliderPosition;
+    var selectedBlockName = undefined;
+    var selectedItems = this.selectedItems();
+    if (selectedItems.length===1) {
+        selectedBlockName = selectedItems[0].data(BlockList.colName, Qt.UserRole);
+    }
+
+    this.clear();
+    if (isNull(documentInterface)) {
+        return;
+    }
+
+    var doc = documentInterface.getDocument();
+
+    var blockCandidateIds = doc.queryAllBlocks();
+
+    var i;
+
+    // filter block names:
+    var blockIds = [];
+    for (i=0; i<blockCandidateIds.length; i++) {
+        var blockCandidateId = blockCandidateIds[i];
+        var blockCandidate = doc.queryBlockDirect(blockCandidateId);
+        if (isFunction(blockCandidate.isNull) && blockCandidate.isNull()) {
+            continue;
+        }
+
+        if (!this.filter(blockCandidate)) {
+            continue;
+        }
+
+        blockIds.push(blockCandidateId);
+    }
+
+    blockIds = this.sortBlocks(doc, blockIds);
+
+    var currentBlockId = doc.getCurrentBlockId();
+    var selectedItem = undefined;
+    for (i=0; i<blockIds.length; ++i) {
+        var blockId = blockIds[i];
+        var block = doc.queryBlockDirect(blockId);
+        if (isFunction(block.isNull) && block.isNull()) {
+            continue;
+        }
+
+        var blockName = block.getName();
+
+        var item = this.createBlockItem(block);
+        this.addTopLevelItem(item);
+        if (blockName===selectedBlockName) {
+            selectedItem = item;
+        }
+
+        if (currentBlockId===block.getId()) {
+            this.currentBlockItem = item;
+        }
+    }
+
+    this.verticalScrollBar().sliderPosition = pos;
+
+    if (!isNull(selectedItem)) {
+        this.blockSignals(true);
+        selectedItem.setSelected(true);
+        this.blockSignals(false);
+    }
+
+    this.blockActivated();
+};
+
+RBlockListQt.prototype.sortBlocks = function(doc, blockIds) {
+    return doc.sortBlocks(blockIds);
+};
+
+RBlockListQt.getBlockTitle = function(block) {
+    var title = block.getName();
+    var layoutName = block.getLayoutName();
+    if (layoutName.length>0) {
+        title = layoutName + " (" + title + ")";
+    }
+    return title;
+};
+
+RBlockListQt.prototype.createBlockItem = function(block) {
+    var item = new QTreeWidgetItem();
+    var name = block.getName();
+
+    var flags = makeQtItemFlags(Qt.ItemIsSelectable, Qt.ItemIsEnabled);
+    item.setFlags(flags);
+
+    var title = RBlockListQt.getBlockTitle(block);
+
+    item.setText(BlockList.colName, title);
+
+    item.setData(BlockList.colName, Qt.UserRole, name);
+
+    this.updateItemIcons(item, block);
+
+    return item;
+};
+
+RBlockListQt.prototype.updateItemIcons = function(item, block) {
+    if (BlockList.iconVisible.length===0) {
+        BlockList.initStyle();
+    }
+
+    item.setIcon(BlockList.colVisible, BlockList.iconVisible[Number(!block.isFrozen())]);
+
+    var doc = this.di.getDocument();
+    var currentBlockId = doc.getCurrentBlockId();
+
+    // set icon to XRef icon (not editable) or edit icon for regular blocks:
+    if (block.isXRef()) {
+        item.setIcon(BlockList.colEdit, BlockList.iconXRef[1]);
+    }
+    else if (block.isFromXRef()) {
+        item.setIcon(BlockList.colEdit, BlockList.iconFromXRef[1]);
+    }
+    else {
+        item.setIcon(BlockList.colEdit, BlockList.iconEdit[Number(block.getId()===currentBlockId)]);
+    }
+
+
+    //item.setIcon(BlockList.colEdit, BlockList.iconXRef[Number(block.isXRef())]);
+};
+
+/**
+ * Called when no document is active. Clears the block list.
+ */
+RBlockListQt.prototype.clearBlocks = function() {
+    this.clear();
+};
+
+/**
+ * Called when the user clicks the icon beside the block name to hide
+ * all block inserts of that block.
+ */
+RBlockListQt.prototype.itemColumnClickedSlot = function(item, column) {
+    if (isNull(this.di) || isNull(item)) {
+        return;
+    }
+
+    var doc = this.di.getDocument();
+    var block = doc.queryBlock(this.getBlockName(item));
+    if (isFunction(block.isNull) && block.isNull()) {
+        return;
+    }
+
+    if (column===BlockList.colVisible) {
+        block.setFrozen(!block.isFrozen());
+        var op = new RModifyObjectOperation(block, false);
+        this.di.applyOperation(op);
+        //this.updateBlocks(this.di);
+    } else if (column===BlockList.colEdit) {
+        this.setCurrentItem(item);
+        this.editBlock();
+        //this.updateBlocks(this.di);
+    } /*else if (column===BlockList.colXRef) {
+        this.setCurrentItem(item);
+    }*/
+
+    this.blockActivated();
+};
+
+/**
+ * Called when a block name is activated (clicked, highlighted) in the block list.
+ */
+RBlockListQt.prototype.blockActivated = function() {
+    if (isNull(this.di)) {
+        this.enableActions(false);
+        return;
+    }
+
+    var list = this.selectedItems();
+    if (list.length===0) {
+        this.enableActions(false);
+        return;
+    }
+
+    var document = this.di.getDocument();
+    if (isNull(document)) {
+        this.enableActions(false);
+        return;
+    }
+
+    var currentBlock = document.queryCurrentBlock();
+    if (isNull(currentBlock)) {
+        this.enableActions(false);
+        return;
+    }
+
+    var insertable = true;
+    var renamable = true;
+    var removable = true;
+    for (var i=0; i<list.length; i++) {
+        var item = list[i];
+
+        if (isNull(item)) {
+            continue;
+        }
+
+        var blockName = this.getBlockName(item);
+        var block = document.queryBlockDirect(blockName);
+        if (isNull(block)) {
+            continue;
+        }
+
+        insertable = insertable && currentBlock.getName().toLowerCase()!==blockName.toLowerCase() && !blockName.startsWith("*");
+        renamable = renamable && document.getBlockId(blockName)!==document.getModelSpaceBlockId() && !block.isFromXRef();
+        removable = removable && document.getBlockId(blockName)!==document.getModelSpaceBlockId() && !block.isFromXRef();
+        // cannot remove block from XRef:
+        removable = removable && !block.isFromXRef();
+    }
+
+    this.enableActions(insertable, renamable, removable);
+};
+
+/**
+ * \return The block name for the given tree widget item.
+ */
+RBlockListQt.prototype.getBlockName = function(item) {
+    return item.data(BlockList.colName, Qt.UserRole);
+};
+
+/**
+ * \return The list item for the block with the given block name.
+ */
+RBlockListQt.getItem = function(widget, blockName) {
+    for (var i=0; i<widget.topLevelItemCount; i++) {
+        var item = widget.topLevelItem(i);
+        if (item.data(BlockList.colName, Qt.UserRole)===blockName) {
+            return item;
+        }
+    }
+    return undefined;
+};
+
+/**
+ * Enable / disable buttons that edit, remove or insert the active block.
+ */
+RBlockListQt.prototype.enableActions = function(insertable, renamable, removable) {
+    if (isNull(renamable)) {
+        renamable = insertable;
+    }
+    if (isNull(removable)) {
+        removable = insertable;
+    }
+
+    var override;
+    if (insertable===true) {
+        override = 1;
+    }
+    else {
+        override = 0;
+    }
+
+    var action;
+    action = RGuiAction.getByScriptFile("scripts/Block/ToggleBlockVisibility/ToggleBlockVisibility.js");
+    action.setEnabledOverride(insertable, override);
+    action = RGuiAction.getByScriptFile("scripts/Block/InsertBlock/InsertBlock.js");
+    action.setEnabledOverride(insertable, override);
+
+    action = RGuiAction.getByScriptFile("scripts/Block/RemoveBlock/RemoveBlock.js");
+    action.setEnabledOverride(removable, removable ? 1 : 0);
+
+    action = RGuiAction.getByScriptFile("scripts/Block/RenameBlock/RenameBlock.js");
+    action.setEnabledOverride(renamable, renamable ? 1 : 0);
+};
+
+/**
+ * Called when the user wants to edit the currently selected block
+ * (double click).
+ */
+RBlockListQt.prototype.editBlock = function() {
+    var block = this.getSelectedBlock();
+
+    var action = undefined;
+
+    if (!isNull(block) && block.isXRef() && !block.isFromXRef()) {
+        // one single block selected in block list:
+
+        // editing XRef triggers rename which also allows editing the path:
+        action = RGuiAction.getByScriptFile("scripts/Block/RenameBlock/RenameBlock.js");
+    }
+
+    if (isNull(action)) {
+        action = RGuiAction.getByScriptFile("scripts/Block/EditBlock/EditBlock.js");
+    }
+
+    if (!isNull(action)) {
+        action.slotTrigger();
+    }
+
+    this.blockActivated();
+};
+
+/**
+ * If one item is selected, return the corresponding block otherwise undefined.
+ */
+RBlockListQt.prototype.getSelectedBlock = function() {
+    var items = BlockList.getSelectedItems();
+    if (items.length===1) {
+        // one single block selected in block list:
+        var item = items[0];
+        var blockName = this.getBlockName(item);
+        var doc = this.di.getDocument();
+        return doc.queryBlockDirect(blockName);
+    }
+    return undefined;
+};
+
+
+
+/**
+ * \class BlockList
+ * \brief Initializes the block list widget (RBlockListQt).
+ * \ingroup ecma_widgets
+ */
+function BlockList(guiAction) {
+    Widgets.call(this, guiAction);
+}
+
+BlockList.prototype = new Widgets();
+BlockList.includeBasePath = includeBasePath;
+
+BlockList.colVisible=0;
+BlockList.colEdit=1;
+BlockList.colName=2;
+
+BlockList.iconVisible = [];
+BlockList.iconEdit = [];
+BlockList.iconXRef = [];
+BlockList.iconFromXRef = [];
+
+BlockList.initStyle = function(upd) {
+    if (isNull(upd)) {
+        upd = true;
+    }
+
+    BlockList.iconVisible = [
+        new QIcon(autoIconPath(BlockList.includeBasePath + "/BlockVisible0.svg")),
+        new QIcon(autoIconPath(BlockList.includeBasePath + "/BlockVisible1.svg"))
+    ];
+
+    BlockList.iconEdit = [
+        new QIcon(autoIconPath(BlockList.includeBasePath + "/BlockEdit0.svg")),
+        new QIcon(autoIconPath(BlockList.includeBasePath + "/BlockEdit1.svg"))
+    ];
+
+    BlockList.iconXRef = [
+        new QIcon(autoIconPath(BlockList.includeBasePath + "/BlockXRef0.svg")),
+        new QIcon(autoIconPath(BlockList.includeBasePath + "/BlockXRef1.svg"))
+    ];
+
+    BlockList.iconFromXRef = [
+        new QIcon(autoIconPath(BlockList.includeBasePath + "/BlockFromXRef0.svg")),
+        new QIcon(autoIconPath(BlockList.includeBasePath + "/BlockFromXRef1.svg"))
+    ];
+
+    //var pal = RMainWindowQt.getMainWindow().palette;
+    //var highlightingIsDark = pal.color(QPalette.Active, QPalette.Highlight).lightness()<128;
+    var appWin = EAction.getMainWindow();
+    var blockList = appWin.findChild("BlockList");
+    var highlightingIsDark = RSettings.getWidgetSelectionColor(blockList).lightness()<128;
+    var backgroundIsDark = RSettings.hasDarkGuiBackground();
+
+    var useAlternativeIcons = backgroundIsDark && !highlightingIsDark || !backgroundIsDark && highlightingIsDark;
+
+    if (RS.getSystemId()==="win") {
+        useAlternativeIcons = false;
+    }
+
+    if (RSettings.getMajorVersion()<4 && !RSettings.getOriginalArguments().contains("-v4")) {
+        // v4 uses visual cues instead of colors to identify states:
+        useAlternativeIcons = false;
+    }
+
+    // use inverse icons for selected items:
+    // in dark mode, if the highlight color is also dark, the normal icons are already good for selected items:
+    if (useAlternativeIcons) {
+        BlockList.iconVisible[0].addFile(autoIconPath(BlockList.includeBasePath + "/BlockVisible0.svg", true), new QSize(), QIcon.Selected);
+        BlockList.iconVisible[1].addFile(autoIconPath(BlockList.includeBasePath + "/BlockVisible1.svg", true), new QSize(), QIcon.Selected);
+        BlockList.iconEdit[0].addFile(autoIconPath(BlockList.includeBasePath + "/BlockEdit0.svg", true), new QSize(), QIcon.Selected);
+        BlockList.iconEdit[1].addFile(autoIconPath(BlockList.includeBasePath + "/BlockEdit1.svg", true), new QSize(), QIcon.Selected);
+        BlockList.iconXRef[0].addFile(autoIconPath(BlockList.includeBasePath + "/BlockXRef0.svg", true), new QSize(), QIcon.Selected);
+        BlockList.iconXRef[1].addFile(autoIconPath(BlockList.includeBasePath + "/BlockXRef1.svg", true), new QSize(), QIcon.Selected);
+        BlockList.iconFromXRef[0].addFile(autoIconPath(BlockList.includeBasePath + "/BlockFromXRef0.svg", true), new QSize(), QIcon.Selected);
+        BlockList.iconFromXRef[1].addFile(autoIconPath(BlockList.includeBasePath + "/BlockFromXRef1.svg", true), new QSize(), QIcon.Selected);
+    }
+
+
+    if (upd) {
+        appWin.notifyBlockListeners(EAction.getDocumentInterface());
+    }
+};
+
+BlockList.getPreferencesCategory = function() {
+    return [ qsTr("Widgets"), qsTr("Block List") ];
+};
+
+BlockList.applyPreferences = function(doc, mdiChild) {
+    var appWin = RMainWindowQt.getMainWindow();
+    appWin.notifyBlockListeners(EAction.getDocumentInterface());
+
+    var blockList = appWin.findChild("BlockList");
+    WidgetFactory.initList(blockList, "BlockList");
+};
+
+/**
+ * \return Active item.
+ */
+BlockList.getActiveItem = function() {
+    var appWin = RMainWindowQt.getMainWindow();
+    var blockList = appWin.findChild("BlockList");
+    if (isNull(blockList)) {
+        return undefined;
+    }
+
+    return blockList.getActiveItem();
+};
+
+BlockList.getSelectedItems = function() {
+    var appWin = RMainWindowQt.getMainWindow();
+    var blockList = appWin.findChild("BlockList");
+    if (isNull(blockList)) {
+        return undefined;
+    }
+
+    return blockList.selectedItems();
+};
+
+/**
+ * Shows, raises or hides the block list:
+ * - block list hidden: show and raise the block list
+ * - block list visible but stacked behind other dock widgets: raise the block list
+ * - block list visible and on top of its stack or not stacked: hide the block list
+ */
+BlockList.prototype.beginEvent = function() {
+    Widgets.prototype.beginEvent.call(this);
+
+    var appWin = RMainWindowQt.getMainWindow();
+    var dock = appWin.findChild("BlockListDock");
+    if (!isNull(dock) && !RSettings.getOriginalArguments().contains("-no-show")) {
+        if (!dock.visible) {
+            // block list is hidden: show it and raise it to the top of its stack:
+            dock.visible = true;
+            dock.raise();
+        }
+        else if (dock.visibleRegion().isEmpty()) {
+            // block list is visible but completely covered by other dock widgets
+            // (tabbed dock widget which is not the current tab): raise it:
+            dock.raise();
+        }
+        else {
+            // block list is visible and on top of its stack (or not stacked): hide it:
+            dock.visible = false;
+        }
+    }
+};
+
+BlockList.prototype.finishEvent = function() {
+    Widgets.prototype.finishEvent.call(this);
+
+    var appWin = RMainWindowQt.getMainWindow();
+    var dock = appWin.findChild("BlockListDock");
+    this.getGuiAction().setChecked(dock.visible);
+};
+
+BlockList.initColumnWidths = function(blockList) {
+    //blockList.setColumnWidth(BlockList.colXRef, 22);
+    blockList.setColumnWidth(BlockList.colVisible, 22);
+    blockList.setColumnWidth(BlockList.colEdit, 22);
+};
+
+/**
+ * Initializes the block list widget.
+ */
+BlockList.init = function(basePath) {
+    var appWin = RMainWindowQt.getMainWindow();
+
+    var action = new RGuiAction(qsTr("Block List"), appWin);
+    action.setRequiresDocument(false);
+    action.setScriptFile(basePath + "/BlockList.js");
+    action.setDefaultShortcut(new QKeySequence("g,b"));
+    action.setDefaultCommands(["gb"]);
+    action.setGroupSortOrder(3600);
+    action.setSortOrder(200);
+    action.setWidgetNames(["ViewMenu", "WidgetsToolBar", "ViewToolsPanel", "WidgetsMatrixPanel"]);
+
+    var formWidget = WidgetFactory.createWidget(basePath, "BlockList.ui");
+    var layout = formWidget.findChild("verticalLayout");
+    var blockList = new RBlockListQt(formWidget);
+    blockList.objectName = "BlockList";
+    if (RSettings.getQtVersion()>0x060000) {
+        layout.addWidget(blockList);
+    }
+    else {
+        layout.addWidget(blockList, 1, 0);
+    }
+
+    RSettings.setValue("BlockList/AlternatingRowColor", new RColor(230, 235, 250), false);
+    WidgetFactory.initList(blockList, "BlockList");
+
+    var button;
+    button = formWidget.findChild("ShowAllBlocks");
+    button.setDefaultAction(RGuiAction.getByScriptFile("scripts/Block/ShowAllBlocks/ShowAllBlocks.js"));
+    button = formWidget.findChild("HideAllBlocks");
+    button.setDefaultAction(RGuiAction.getByScriptFile("scripts/Block/HideAllBlocks/HideAllBlocks.js"));
+    button = formWidget.findChild("AddBlock");
+    button.setDefaultAction(RGuiAction.getByScriptFile("scripts/Block/AddBlock/AddBlock.js"));
+    button = formWidget.findChild("RemoveBlock");
+    button.setDefaultAction(RGuiAction.getByScriptFile("scripts/Block/RemoveBlock/RemoveBlock.js"));
+    button = formWidget.findChild("RenameBlock");
+    button.setDefaultAction(RGuiAction.getByScriptFile("scripts/Block/RenameBlock/RenameBlock.js"));
+    button = formWidget.findChild("EditBlock");
+    button.setDefaultAction(RGuiAction.getByScriptFile("scripts/Block/EditBlock/EditBlock.js"));
+    button = formWidget.findChild("InsertBlock");
+    button.setDefaultAction(RGuiAction.getByScriptFile("scripts/Block/InsertBlock/InsertBlock.js"));
+//    button = formWidget.findChild("CreateBlock");
+//    button.setDefaultAction(RGuiAction.getByScriptFile("scripts/Block/CreateBlock/CreateBlock.js"));
+    button = formWidget.findChild("CloseBlock");
+    button.setDefaultAction(RGuiAction.getByScriptFile("scripts/Block/EditMainDrawing/EditMainDrawing.js"));
+    
+    var dock = new RDockWidget(qsTr("Block List"), appWin);
+    dock.objectName = "BlockListDock";
+    //dock.setProperty("Category", Widgets.getListContextMenuCategory());
+    dock.setWidget(formWidget);
+    appWin.addDockWidget(Qt.RightDockWidgetArea, dock);
+
+
+    dock.shown.connect(function() {
+        action.setChecked(true);
+
+        // Qt 6.6.1 workaround: this only works once widget is visible:
+        BlockList.initColumnWidths(blockList);
+    });
+    dock.hidden.connect(function() { action.setChecked(false); });
+
+    dock.visible = false;
+
+    var pl = new RPaletteListenerAdapter();
+    appWin.addPaletteListener(pl);
+    pl.paletteChanged.connect(BlockList.initStyle);
+
+    BlockList.initStyle(false);
+};

@@ -1,0 +1,294 @@
+/**
+ * Copyright (c) 2011-2018 by Andrew Mustun. All rights reserved.
+ * 
+ * This file is part of the QCAD project.
+ *
+ * QCAD is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * QCAD is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with QCAD.
+ */
+
+#ifndef RMAINWINDOWQT_H
+#define RMAINWINDOWQT_H
+
+#include "gui_global.h"
+
+#include <QByteArray>
+#include <QDockWidget>
+#include <QElapsedTimer>
+#include <QMainWindow>
+#include <QPointer>
+#include <QToolBar>
+
+#include "RMainWindow.h"
+#include "RObject.h"
+
+class QMdiSubWindow;
+
+class RBlockListener;
+class RCoordinateListener;
+class RDocument;
+class RDocumentInterface;
+class REntity;
+class REntityExportListener;
+class RExportListener;
+class RExporter;
+class RFocusListener;
+class RGraphicsView;
+class RImportListener;
+class RInterTransactionListener;
+class RKeyListener;
+class RLayerListener;
+class RMainWindow;
+class RMainWindowProxy;
+class RMainWindowQt;
+class RMdiArea;
+class RMdiChildQt;
+class RMessageHandler;
+class RNewDocumentListener;
+class RObject;
+class RPaletteListener;
+class RPenListener;
+class RPreferencesListener;
+class RProgressHandler;
+class RPropertyEvent;
+class RPropertyListener;
+class RPropertyTypeId;
+class RSelectionListener;
+class RSnapListener;
+class RTransaction;
+class RTransactionListener;
+class RUcsListener;
+class RVector;
+class RViewFocusListener;
+class RViewListener;
+
+
+/**
+ * \brief Base class for a Qt based MDI main application window.
+ *
+ * \ingroup gui
+ *
+ * \scriptable
+ */
+class QCADGUI_EXPORT RMainWindowQt: public QMainWindow, public RMainWindow {
+Q_OBJECT
+
+public:
+    RMainWindowQt(QWidget* parent = 0, bool hasMdiArea = true);
+    virtual ~RMainWindowQt();
+    static RMainWindowQt* getMainWindow();
+    virtual int getWidth();
+    virtual int getHeight();
+    virtual int getPositionX();
+    virtual int getPositionY();
+    virtual void resize(int width, int height);
+    virtual void move(int x, int y);
+    virtual void disable();
+    virtual void enable();
+    virtual RDocument* getDocument();
+    virtual RDocumentInterface* getDocumentInterface();
+
+    virtual void handleUserMessage(const QString& message, bool escape = true);
+    virtual void handleUserInfo(const QString& message, bool escape = true);
+    virtual void handleUserWarning(const QString& message, bool messageBox = false, bool escape = true);
+    virtual void handleUserCommand(const QString& message, bool escape = true);
+
+    void handleEnterKey(QObject* obj) {
+        if (mainWindowProxy) {
+            mainWindowProxy->handleEnterKey(obj);
+        }
+    }
+
+    bool handleTabKey(QObject* obj, bool backTab = false) {
+        if (mainWindowProxy) {
+            return mainWindowProxy->handleTabKey(obj, backTab);
+        }
+        return false;
+    }
+
+    /**
+     * Moves the keyboard focus to the next (or previous) widget in the
+     * focus chain of the main window (standard Tab / Shift+Tab behavior).
+     * Used by widgets that handle Tab themselves (graphics view, options
+     * tool bar) to continue the focus chain when they cannot handle it.
+     */
+    bool focusNextPrevWidget(bool next, QWidget* from = NULL);
+    bool isFocusReachable(QWidget* w) const;
+
+protected:
+    virtual bool focusNextPrevChild(bool next);
+
+public:
+
+    virtual void reloadXRefs(RDocumentInterface* di, const QSet<QString>& dirtyXRefPaths);
+
+    virtual void postSelectionChangedEvent();
+    virtual void postTransactionEvent(
+        RTransaction& t,
+        bool onlyChanges=false,
+        RS::EntityType entityTypeFilter = RS::EntityAll
+    );
+    virtual void postPropertyEvent(RPropertyTypeId propertyTypeId,
+        const QVariant& value,
+        RS::EntityType entityTypeFilter = RS::EntityAll
+    );
+    virtual void postCloseEvent();
+
+    RMdiChildQt* getMdiChild();
+    QTabBar* getTabBar();
+    RMdiArea* getMdiArea();
+
+    virtual void cancelProgress();
+    virtual void setProgress(int value);
+    virtual void setProgressEnd();
+    virtual void setProgressText(const QString& text = "");
+
+    virtual void setCommandPrompt(const QString& text = "");
+    virtual void setLeftMouseTip(const QString& text = "");
+    virtual void setRightMouseTip(const QString& text = "");
+
+    virtual void showContextMenu(RObject::Id entityId, const RVector& pos);
+    virtual void requestResourceBlockEditing(RObject::Id entityId, const RVector& pos);
+    virtual void escapeEvent();
+
+    virtual void setGraphicsViewCursor(const QCursor& cursor);
+
+    virtual bool readSettings();
+    virtual void writeSettings();
+
+    virtual QMenu* createPopupMenu();
+
+    virtual QWidget* getChildWidget(const QString& name);
+
+    QList<QDockWidget*> getDockWidgets() {
+        return findChildren<QDockWidget*>();
+    }
+    QList<QToolBar*> getToolBars() {
+        return findChildren<QToolBar*>();
+    }
+
+    void clearKeyLog();
+
+    QString getKeyLog() const {
+        return keyLog;
+    }
+
+    void notifyDockWidgetClosed(QWidget* dockWidget);
+
+public slots:
+    void quit();
+    void currentTabChanged(int index);
+    void subWindowActivated(QMdiSubWindow* sw);
+    //void objectDestroyed(QObject *obj);
+
+protected slots:
+    void forgetDockWidgetState();
+
+signals:
+    /**
+     * Emitted when the command prompt is requested to change.
+     */
+    void commandPrompt(const QString& text);
+
+    /**
+     * Emitted when the left mouse button tip is requested to change.
+     */
+    void leftMouseTip(const QString& message);
+
+    /**
+     * Emitted when the right mouse button tip is requested to change.
+     */
+    void rightMouseTip(const QString& message);
+
+    void progress(int value);
+    void progressEnd();
+    void progressText(const QString& label);
+    void progressCanceled();
+
+    void userMessage(const QString& message, bool escape);
+    void userInfo(const QString& message, bool escape);
+    void userWarning(const QString& message, bool messageBox, bool escape);
+    void userCommand(const QString& message, bool escape);
+
+    void reloadXRefsSignal(RDocumentInterface* di, const QStringList& dirtyXRefPaths);
+
+    /**
+     * Emitted when a context menu is requested on top of the given entity.
+     */
+    void contextMenu(int entityId, const RVector& pos);
+    /**
+     * Emitted when resource block editing is requested (double-click, context menu, ...):
+     */
+    void editResourceBlock(int entityId, const RVector& pos);
+    void escape();
+    void drop(QDropEvent* event);
+    void dragEnter(QDragEnterEvent* event);
+
+    void resumedTab(RMdiChildQt* mdiChild);
+
+    void closeRequested();
+    void enterPressed();
+
+    void toolBarContextMenu(QMenu* menu);
+
+protected:
+    virtual void closeEvent(QCloseEvent* e);
+    virtual void dropEvent(QDropEvent* event);
+    virtual void dragEnterEvent(QDragEnterEvent* event);
+
+    virtual bool event(QEvent* e);
+
+    /**
+     * \nonscriptable
+     */
+    static bool isStaleAutoRepeatKeyEvent(QKeyEvent* ke);
+
+    void restoreClosedDockWidgets();
+
+public slots:
+    void updateGuiActions(QMdiSubWindow* mdiChild = NULL);
+    void initGuiActions();
+    void updateScenes(QMdiSubWindow* mdiChild);
+    void notifyListenersSlot(QMdiSubWindow* mdiChild);
+    void suspendAndResume(QMdiSubWindow* mdiChild);
+
+protected:
+    RMdiArea* mdiArea;
+
+    int disableCounter;
+
+    QString keyLog;
+    QElapsedTimer keyTimeOut;
+
+    // State of all dock widgets and tool bars as it was before the first
+    // dock widget of the current close operation was closed by Qt.
+    // Only valid if dockWidgetStateValid is true.
+    // See notifyDockWidgetClosed().
+    QByteArray dockWidgetState;
+    bool dockWidgetStateValid;
+
+    // true while the main window is handling its close event:
+    bool closingDown;
+
+    // Dock widgets that were visible and have been closed by Qt as part of
+    // the current close operation, together with their X position:
+    QList<QPointer<QWidget> > closedDockWidgets;
+    QList<int> closedDockWidgetPositionsX;
+
+//private:
+//    bool objectWasDestroyed;
+};
+
+Q_DECLARE_METATYPE(RMainWindowQt*)
+
+#endif

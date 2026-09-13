@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<unit xmlns="http://www.sdml.info/srcML/src" xmlns:cpp="http://www.sdml.info/srcML/cpp" language="C++" dir="./core" filename="RSnap.h"><comment type="block">/**
+ * Copyright (c) 2011-2018 by Andrew Mustun. All rights reserved.
+ * 
+ * This file is part of the QCAD project.
+ *
+ * QCAD is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * QCAD is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with QCAD.
+ */</comment>
+
+<cpp:ifndef>#<cpp:directive>ifndef</cpp:directive> <name>RSNAP_H</name></cpp:ifndef>
+<cpp:define>#<cpp:directive>define</cpp:directive> <name>RSNAP_H</name></cpp:define>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"core_global.h"</cpp:file></cpp:include>
+
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"RMath.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"RObject.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"RVector.h"</cpp:file></cpp:include>
+<cpp:include>#<cpp:directive>include</cpp:directive> <cpp:file>"RRefPoint.h"</cpp:file></cpp:include>
+
+<class_decl>class <name>RGraphicsView</name>;</class_decl>
+<class_decl>class <name>RMouseEvent</name>;</class_decl>
+
+<comment type="block">/**
+ * \brief Abstract base class for all grid and object snap 
+ * implementations.
+ * A snap class implements an object or grid snap tool. For
+ * example to snap to end points of objects.
+ *
+ * \scriptable
+ * \generateScriptShell
+ *
+ * \ingroup core
+ */</comment>
+<class>class <macro><name>QCADCORE_EXPORT</name></macro> <name>RSnap</name> <block>{<private type="default">
+</private><public>public:
+    <comment type="block">/**
+     * Snap status, returned by snap tools (most importantly auto snap tool)
+     * to indicate what snap was used.
+     */</comment>
+    <enum>enum <name>Status</name> <block>{
+        <expr><name>Unknown</name> = 0</expr>,
+        <expr><name>Free</name> = 1</expr>,
+        <expr><name>Grid</name> = 2</expr>,
+        <expr><name>Endpoint</name> = 3</expr>,
+        <expr><name>OnEntity</name> = 4</expr>,
+        <expr><name>Center</name> = 5</expr>,
+        <expr><name>Middle</name> = 6</expr>,
+        <expr><name>Distance</name> = 7</expr>,
+        <expr><name>Intersection</name> = 8</expr>,
+        <expr><name>IntersectionManual</name> = 9</expr>,
+        <expr><name>Reference</name> = 10</expr>,
+        <expr><name>Perpendicular</name> = 11</expr>,
+        <expr><name>Tangential</name> = 12</expr>,
+        <expr><name>Coordinate</name> = 13</expr>,
+        <expr><name>CoordinatePolar</name> = 14</expr>,
+        <expr><name>TopLeft</name> = 15</expr>,
+        <expr><name>TopMiddle</name> = 16</expr>,
+        <expr><name>TopRight</name> = 17</expr>,
+        <expr><name>MiddleLeft</name> = 18</expr>,
+        <expr><name>MiddleMiddle</name> = 19</expr>,
+        <expr><name>MiddleRight</name> = 20</expr>,
+        <expr><name>BottomLeft</name> = 21</expr>,
+        <expr><name>BottomMiddle</name> = 22</expr>,
+        <expr><name>BottomRight</name> = 23</expr>
+    }</block>;</enum>
+
+</public><public>public:
+    <constructor_decl><name>RSnap</name><parameter_list>(<param><decl><type><name><name>RSnap</name>::<name>Status</name></name></type> <name>s</name> =<init> <expr><name><name>RSnap</name>::<name>Unknown</name></name></expr></init></decl></param>)</parameter_list>;</constructor_decl>
+    <destructor_decl><name>~RSnap</name><parameter_list>()</parameter_list>;</destructor_decl>
+
+    <comment type="block">/**
+     * \return The snapped position (closest relevant position)
+     * for the given mouse position.
+     */</comment>
+    <function><type><name>virtual</name> <name>RVector</name></type> <name>snap</name><parameter_list>(
+            <param><decl><type><name>const</name> <name>RVector</name>&amp;</type> <name>position</name></decl></param>,
+            <param><decl><type><name>RGraphicsView</name>&amp;</type> <name>view</name></decl></param>,
+            <param><decl><type><name>double</name></type> <name>range</name>=<init><expr><name>RNANDOUBLE</name></expr></init></decl></param>)</parameter_list> <block>{
+
+        <return>return <expr><name><name>RVector</name>::<name>invalid</name></name></expr>;</return>
+    }</block></function>
+
+    <comment type="block">/**
+     * \overload
+     * \nonscriptable
+     */</comment>
+    <function_decl><type><name>virtual</name> <name>RVector</name></type> <name>snap</name><parameter_list>(<param><decl><type><name>RMouseEvent</name>&amp;</type> <name>event</name></decl></param>)</parameter_list>;</function_decl>
+
+    <function><type><name>virtual</name> <name>void</name></type> <name>showUiOptions</name><parameter_list>()</parameter_list> <block>{}</block></function>
+    <function><type><name>virtual</name> <name>void</name></type> <name>hideUiOptions</name><parameter_list>()</parameter_list> <block>{}</block></function>
+
+    <function><type><name>virtual</name> <name>void</name></type> <name>suspendEvent</name><parameter_list>()</parameter_list> <block>{
+        <constructor_decl><name>hideUiOptions</name><parameter_list>()</parameter_list>;</constructor_decl>
+    }</block></function>
+    <function><type><name>virtual</name> <name>void</name></type> <name>finishEvent</name><parameter_list>()</parameter_list> <block>{
+        <constructor_decl><name>hideUiOptions</name><parameter_list>()</parameter_list>;</constructor_decl>
+    }</block></function>
+
+    <function><type><name>virtual</name> <name>QList<argument_list>&lt;<argument><name>RRefPoint</name></argument>&gt;</argument_list></name></type> <name>getSnapReferencePoints</name><parameter_list>()</parameter_list> <specifier>const</specifier> <block>{
+        <return>return <expr><call><name>QList<argument_list>&lt;<argument><name>RRefPoint</name></argument>&gt;</argument_list></name><argument_list>()</argument_list></call></expr>;</return>
+    }</block></function>
+
+    <comment type="block">/**
+     * \return Set of entity IDs that are relevant for the last performed
+     * snap, usually used for highlighting.
+     */</comment>
+    <function><type><name>QList<argument_list>&lt;<argument><name><name>RObject</name>::<name>Id</name></name></argument>&gt;</argument_list></name></type> <name>getEntityIds</name><parameter_list>()</parameter_list> <block>{
+        <return>return <expr><name>entityIds</name></expr>;</return>
+    }</block></function>
+
+    <function><type><name><name>RSnap</name>::<name>Status</name></name></type> <name>getStatus</name><parameter_list>()</parameter_list> <specifier>const</specifier> <block>{
+        <return>return <expr><name>status</name></expr>;</return>
+    }</block></function>
+
+    <function><type><name>void</name></type> <name>setStatus</name><parameter_list>(<param><decl><type><name><name>RSnap</name>::<name>Status</name></name></type> <name>s</name></decl></param>)</parameter_list> <block>{
+        <expr_stmt><expr><name>status</name> = <name>s</name></expr>;</expr_stmt>
+    }</block></function>
+
+    <function><type><name>RVector</name></type> <name>getLastSnap</name><parameter_list>()</parameter_list> <specifier>const</specifier> <block>{
+        <return>return <expr><name>lastSnap</name></expr>;</return>
+    }</block></function>
+
+    <function><type><name>void</name></type> <name>setLastSnap</name><parameter_list>(<param><decl><type><name>const</name> <name>RVector</name>&amp;</type> <name>v</name></decl></param>)</parameter_list> <block>{
+        <expr_stmt><expr><name>lastSnap</name> = <name>v</name></expr>;</expr_stmt>
+    }</block></function>
+
+    <function><type><name>virtual</name> <name>void</name></type> <name>reset</name><parameter_list>()</parameter_list> <block>{
+        <expr_stmt><expr><name>entityIds</name>.<call><name>clear</name><argument_list>()</argument_list></call></expr>;</expr_stmt>
+        <expr_stmt><expr><name>lastSnap</name> = <name><name>RVector</name>::<name>invalid</name></name></expr>;</expr_stmt>
+    }</block></function>
+
+</public><protected>protected:
+    <decl_stmt><decl><type><name>QList<argument_list>&lt;<argument><name><name>RObject</name>::<name>Id</name></name></argument>&gt;</argument_list></name></type> <name>entityIds</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name><name>RSnap</name>::<name>Status</name></name></type> <name>status</name></decl>;</decl_stmt>
+    <decl_stmt><decl><type><name>RVector</name></type> <name>lastSnap</name></decl>;</decl_stmt>
+</protected>}</block>;</class>
+
+<macro><name>Q_DECLARE_METATYPE</name><argument_list>(<argument>RSnap*</argument>)</argument_list></macro>
+<macro><name>Q_DECLARE_METATYPE</name><argument_list>(<argument>RSnap::Status</argument>)</argument_list></macro>
+
+<cpp:endif>#<cpp:directive>endif</cpp:directive></cpp:endif>
+</unit>
