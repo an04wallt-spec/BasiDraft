@@ -16,6 +16,7 @@ struct ClusterBox2d {
     double height() const { return valid ? maxY - minY : 0.0; }
     double centerX() const { return valid ? (minX + maxX) * 0.5 : 0.0; }
     double centerY() const { return valid ? (minY + maxY) * 0.5 : 0.0; }
+    double area() const { return valid ? width() * height() : 0.0; }
 };
 
 struct SpatialItem {
@@ -36,7 +37,15 @@ struct ViewClusterOptions {
     // between neighbouring drawing views.
     double proximityTolerance = 1.0e-4;
 
-    // A BAZIS view can contain disconnected upper / lower geometry. The second
+    // Furniture views can contain disconnected hardware / detail geometry that
+    // lies completely inside the already established view extents without
+    // touching its contour. Such small enclosed islands may be folded into the
+    // surrounding view after primary connectivity is established.
+    bool mergeContainedIslands = true;
+    double containmentTolerance = 1.0e-4;
+    double maximumContainedAreaFraction = 0.25;
+
+    // A BAZIS view can contain disconnected upper / lower geometry. The next
     // pass may merge vertically separated islands only when their horizontal
     // spans are strongly aligned. All thresholds are conservative and exposed.
     bool mergeVerticallyAlignedIslands = true;
