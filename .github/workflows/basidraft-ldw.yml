@@ -35,3 +35,27 @@ jobs:
         run: cmake -S . -B build -G Ninja -DBUILD_QT6=ON
       - name: Build LDW plugin and dependencies
         run: cmake --build build --target basidraftldw --parallel 2
+
+  script-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Qt 6 runtime / build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake ninja-build g++ \
+            qt6-base-dev qt6-declarative-dev qt6-svg-dev
+      - name: Configure QCAD / BasiDraft
+        run: cmake -S . -B build -G Ninja -DBUILD_QT6=ON
+      - name: Build QCAD executable and LDW plugin
+        run: cmake --build build --target qcad basidraftldw --parallel 2
+      - name: Load BasiDraft automation script headlessly
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          ./debug/qcad-bin \
+            -no-gui \
+            -no-show \
+            -exec scripts/Developer/BasiDraft/BasiDraftScriptSmoke.js \
+            -quit
