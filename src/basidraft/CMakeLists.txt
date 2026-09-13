@@ -9,6 +9,8 @@ add_library(basidraft_ldw STATIC
     geometry/GeometryFingerprint.h
     geometry/ViewMatcher.cpp
     geometry/ViewMatcher.h
+    geometry/GeometryNormalizer.cpp
+    geometry/GeometryNormalizer.h
 )
 
 target_compile_features(basidraft_ldw PUBLIC cxx_std_17)
