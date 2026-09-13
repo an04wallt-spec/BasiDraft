@@ -51,6 +51,16 @@ jobs:
             -o /tmp/basidraft-view-clusterer-tests
       - name: Run logical view clusterer tests
         run: /tmp/basidraft-view-clusterer-tests
+      - name: Build complete revision pipeline tests
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -pedantic \
+            src/basidraft/geometry/ViewMatcher.cpp \
+            src/basidraft/geometry/RevisionPipeline.cpp \
+            src/basidraft/tests/RevisionPipelineTests.cpp \
+            -Isrc/basidraft \
+            -o /tmp/basidraft-revision-pipeline-tests
+      - name: Run complete revision pipeline tests
+        run: /tmp/basidraft-revision-pipeline-tests
 
   plugin-build:
     runs-on: ubuntu-latest
