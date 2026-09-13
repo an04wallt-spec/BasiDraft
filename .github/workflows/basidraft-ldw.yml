@@ -15,6 +15,7 @@ jobs:
         run: |
           g++ -std=c++17 -O2 -Wall -Wextra -pedantic \
             src/basidraft/ldw/LdwReader.cpp \
+            src/basidraft/geometry/GeometryFingerprint.cpp \
             src/basidraft/tests/LdwReaderTests.cpp \
             -Isrc/basidraft \
             -o /tmp/basidraft-ldw-tests
