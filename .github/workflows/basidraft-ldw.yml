@@ -158,3 +158,25 @@ jobs:
             tests/fixtures/dxf/basidraft_revision_new_r12.dxf \
             -exec scripts/Developer/BasiDraft/BasiDraftRevisionCheckSmoke.js \
             -quit
+      - name: Compare regenerated DXF through hidden in-memory document
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          ./debug/qcad-bin \
+            -allow-multiple-instances \
+            -no-show \
+            -config /tmp/basidraft-hidden-update.ini \
+            tests/fixtures/dxf/basidraft_revision_old_r12.dxf \
+            -exec scripts/Developer/BasiDraft/BasiDraftUpdateFromDxfSmoke.js \
+            -quit
+      - name: Update native bound dimension from regenerated DXF
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          ./debug/qcad-bin \
+            -allow-multiple-instances \
+            -no-show \
+            -config /tmp/basidraft-bound-dimension.ini \
+            tests/fixtures/dxf/basidraft_revision_old_r12.dxf \
+            -exec scripts/Developer/BasiDraft/BasiDraftBoundDimensionUpdateSmoke.js \
+            -quit
