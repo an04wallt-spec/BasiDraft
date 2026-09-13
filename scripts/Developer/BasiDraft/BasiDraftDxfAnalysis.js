@@ -61,6 +61,51 @@ BasiDraftDxfAnalysis.isIsoPaperBox = function(box) {
     return false;
 };
 
+/**
+ * Counts BAZIS / foreign annotation recursively through INSERTs.
+ *
+ * UpdateFromDxf accepts geometry-only source files. Looking at model-space
+ * entities alone is not sufficient because BAZIS commonly packages drawing
+ * content into anonymous blocks. A TEXT / DIMENSION / HATCH hidden one or more
+ * block levels deep must therefore veto a source refresh just like a top-level
+ * annotation entity would.
+ */
+BasiDraftDxfAnalysis.countForeignAnnotations = function(document, entity, depth) {
+    if (isNull(entity)) {
+        return 0;
+    }
+    if (isNull(depth)) {
+        depth = 0;
+    }
+    if (depth > 32) {
+        // A cyclic or malformed block graph is not trusted. Treat it as one
+        // foreign item so guarded source refresh cannot proceed silently.
+        return 1;
+    }
+
+    var type = entity.getType();
+    if (BasiDraftDxfAnalysis.isForeignAnnotationType(type)) {
+        return 1;
+    }
+
+    if (type !== RS.EntityBlockRef && type !== RS.EntityBlockRefAttr) {
+        return 0;
+    }
+
+    var data = entity.getData();
+    var subIds = document.queryBlockEntities(data.getReferencedBlockId());
+    var count = 0;
+    for (var i=0; i<subIds.length; ++i) {
+        var subEntity = data.queryEntity(subIds[i], true);
+        count += BasiDraftDxfAnalysis.countForeignAnnotations(
+            document,
+            subEntity,
+            depth+1
+        );
+    }
+    return count;
+};
+
 BasiDraftDxfAnalysis.countGeometry = function(document, entity, depth) {
     if (isNull(entity)) {
         return 0;
@@ -252,6 +297,9 @@ BasiDraftDxfAnalysis.analyzeDocument = function(document) {
 
         if (type === RS.EntityBlockRef || type === RS.EntityBlockRefAttr) {
             ++result.topLevelBlockReferenceCount;
+            result.foreignAnnotationCount +=
+                BasiDraftDxfAnalysis.countForeignAnnotations(document, entity, 0);
+
             var data = entity.getData();
             var box = data.getBoundingBox();
             var record = BasiDraftDxfAnalysis.makeGeometryRecord(document, entity);
