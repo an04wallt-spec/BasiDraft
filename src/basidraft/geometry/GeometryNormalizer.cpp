@@ -1,7 +1,6 @@
 #include "GeometryNormalizer.h"
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <cstdint>
 #include <map>
@@ -11,6 +10,8 @@
 
 namespace basidraft::geometry {
 namespace {
+
+constexpr double kPi = 3.141592653589793238462643383279502884;
 
 struct PointKey {
     std::int64_t x = 0;
@@ -101,6 +102,7 @@ NormalizationResult normalizeLines(
     }
 
     std::vector<Line2d> working;
+    std::vector<Line2d> passthroughDegenerate;
     working.reserve(input.size());
 
     // Stage 1: remove only geometrically degenerate segments. Short but real
@@ -111,6 +113,8 @@ NormalizationResult normalizeLines(
             if (options.dropDegenerateLines) {
                 continue;
             }
+            passthroughDegenerate.push_back(line);
+            continue;
         }
         working.push_back(canonicalLine(line));
     }
@@ -121,8 +125,7 @@ NormalizationResult normalizeLines(
         std::map<LineKey, Line2d> unique;
         for (const Line2d& line : working) {
             const LineKey key = lineKey(line, options.coordinateTolerance);
-            const auto [it, inserted] = unique.emplace(key, line);
-            (void)it;
+            const auto inserted = unique.emplace(key, line).second;
             if (!inserted) {
                 ++result.stats.duplicateLineCount;
             }
@@ -130,14 +133,18 @@ NormalizationResult normalizeLines(
 
         working.clear();
         working.reserve(unique.size());
-        for (const auto& [key, line] : unique) {
-            (void)key;
-            working.push_back(line);
+        for (const auto& item : unique) {
+            working.push_back(item.second);
         }
     }
 
     if (!options.mergeCollinearLines) {
         result.lines = std::move(working);
+        result.lines.insert(
+            result.lines.end(),
+            passthroughDegenerate.begin(),
+            passthroughDegenerate.end()
+        );
         result.stats.outputLineCount = result.lines.size();
         return result;
     }
@@ -151,17 +158,6 @@ NormalizationResult normalizeLines(
         double dx = line.x2 - line.x1;
         double dy = line.y2 - line.y1;
         const double length = std::hypot(dx, dy);
-        if (length <= options.coordinateTolerance) {
-            // A retained degenerate line (dropDegenerateLines == false) is kept
-            // outside the collinear merge path.
-            CollinearKey key{
-                quantize(std::atan2(dy, dx), options.angularTolerance),
-                quantize(line.x1 + line.y1, options.coordinateTolerance)
-            };
-            CollinearGroup& group = groups[key];
-            group.intervals.push_back({0.0, 0.0});
-            continue;
-        }
 
         dx /= length;
         dy /= length;
@@ -173,7 +169,7 @@ NormalizationResult normalizeLines(
 
         double angle = std::atan2(dy, dx);
         if (angle < 0.0) {
-            angle += M_PI;
+            angle += kPi;
         }
 
         const double nx = -dy;
@@ -202,10 +198,10 @@ NormalizationResult normalizeLines(
     }
 
     result.lines.clear();
-    result.lines.reserve(working.size());
+    result.lines.reserve(working.size() + passthroughDegenerate.size());
 
-    for (auto& [key, group] : groups) {
-        (void)key;
+    for (auto& item : groups) {
+        CollinearGroup& group = item.second;
         if (group.intervals.empty()) {
             continue;
         }
@@ -250,6 +246,12 @@ NormalizationResult normalizeLines(
             result.lines.push_back({x1, y1, x2, y2});
         }
     }
+
+    result.lines.insert(
+        result.lines.end(),
+        passthroughDegenerate.begin(),
+        passthroughDegenerate.end()
+    );
 
     result.stats.outputLineCount = result.lines.size();
     return result;
