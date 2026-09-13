@@ -1,4 +1,5 @@
 include("scripts/EAction.js");
+include("scripts/Developer/BasiDraft/BasiDraftOwnership.js");
 
 /**
  * First BasiDraft automatic dimensioning action.
@@ -99,8 +100,6 @@ BasiDraftOverall.prototype.beginEvent = function() {
     var geometryOffset = Math.max(width, height) * 0.025;
     var offset = Math.max(styleOffset, geometryOffset);
 
-    // Prevent a pathological zero / tiny dimension style from putting the
-    // dimension line directly on top of the view.
     if (typeof(offset) !== "number" || isNaN(offset) || offset <= RS.PointTolerance) {
         offset = Math.max(10.0, Math.max(width, height) * 0.025);
     }
@@ -116,7 +115,9 @@ BasiDraftOverall.prototype.beginEvent = function() {
     op.setText(qsTr("BasiDraft: габаритные размеры"));
 
     for (var i = 0; i < data.length; ++i) {
-        op.addObject(new RDimRotatedEntity(document, data[i]));
+        var entity = new RDimRotatedEntity(document, data[i]);
+        BasiDraftOwnership.mark(entity, "Dimension");
+        op.addObject(entity);
     }
 
     di.applyOperation(op);
