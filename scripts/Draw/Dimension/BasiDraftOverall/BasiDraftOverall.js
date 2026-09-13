@@ -91,6 +91,45 @@ BasiDraftOverall.findLogicalViewIndex = function(document, box) {
     return found;
 };
 
+/**
+ * Creates native QCAD dimension entities with semantic bindings but does not
+ * mutate the document. This keeps the user action and runtime tests on exactly
+ * the same creation path.
+ */
+BasiDraftOverall.createBoundEntities = function(document, box, viewIndex, offset) {
+    var result = [];
+    if (isNull(document) || viewIndex < 0) {
+        return result;
+    }
+
+    var width = box.getWidth();
+    var height = box.getHeight();
+    var data = BasiDraftOverall.createDimensionData(box, offset);
+    var modes = [];
+    if (width > RS.PointTolerance) {
+        modes.push("width");
+    }
+    if (height > RS.PointTolerance) {
+        modes.push("height");
+    }
+    if (modes.length !== data.length) {
+        return [];
+    }
+
+    for (var i=0; i<data.length; ++i) {
+        var entity = new RDimRotatedEntity(document, data[i]);
+        var binding = BasiDraftDimensionBinding.makeViewExtentBinding(
+            viewIndex,
+            modes[i]
+        );
+        if (!BasiDraftDimensionBinding.attach(entity, binding)) {
+            return [];
+        }
+        result.push(entity);
+    }
+    return result;
+};
+
 BasiDraftOverall.prototype.beginEvent = function() {
     EAction.prototype.beginEvent.call(this);
 
@@ -153,41 +192,22 @@ BasiDraftOverall.prototype.beginEvent = function() {
         offset = Math.max(10.0, Math.max(width, height) * 0.025);
     }
 
-    var data = BasiDraftOverall.createDimensionData(box, offset);
-    if (data.length === 0) {
-        EAction.handleUserMessage(qsTr("Не удалось создать габаритные размеры."));
-        this.terminate();
-        return;
-    }
-
-    var modes = [];
-    if (width > RS.PointTolerance) {
-        modes.push("width");
-    }
-    if (height > RS.PointTolerance) {
-        modes.push("height");
-    }
-    if (modes.length !== data.length) {
-        EAction.handleUserWarning(qsTr("Не удалось сформировать безопасные привязки габаритных размеров."));
+    var entities = BasiDraftOverall.createBoundEntities(
+        document,
+        box,
+        viewIndex,
+        offset
+    );
+    if (entities.length === 0) {
+        EAction.handleUserWarning(qsTr("Не удалось создать безопасно привязанные габаритные размеры."));
         this.terminate();
         return;
     }
 
     var op = new RAddObjectsOperation();
     op.setText(qsTr("BasiDraft: габаритные размеры"));
-
-    for (var i = 0; i < data.length; ++i) {
-        var entity = new RDimRotatedEntity(document, data[i]);
-        var binding = BasiDraftDimensionBinding.makeViewExtentBinding(
-            viewIndex,
-            modes[i]
-        );
-        if (!BasiDraftDimensionBinding.attach(entity, binding)) {
-            EAction.handleUserWarning(qsTr("Не удалось привязать габаритный размер к виду."));
-            this.terminate();
-            return;
-        }
-        op.addObject(entity);
+    for (var i=0; i<entities.length; ++i) {
+        op.addObject(entities[i]);
     }
 
     di.applyOperation(op);
