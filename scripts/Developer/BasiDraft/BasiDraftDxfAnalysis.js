@@ -3,9 +3,9 @@ include("scripts/EAction.js");
 /**
  * QCAD-side adapter for the BasiDraft DXF analysis pipeline.
  *
- * This layer deliberately does not modify the imported document. It only
- * classifies top-level DXF/QCAD entities and inspects block contents so later
- * BasiDraft stages can create their own raw / presentation view snapshots.
+ * This layer deliberately does not modify the imported document. It classifies
+ * top-level DXF/QCAD entities and exposes enough raw geometry information for
+ * logical-view clustering and revision snapshots.
  */
 function BasiDraftDxfAnalysis() {
 }
@@ -70,7 +70,6 @@ BasiDraftDxfAnalysis.countGeometry = function(document, entity, depth) {
         depth = 0;
     }
 
-    // Prevent a malformed / cyclic block graph from hanging analysis.
     if (depth > 32) {
         return 0;
     }
@@ -89,8 +88,6 @@ BasiDraftDxfAnalysis.countGeometry = function(document, entity, depth) {
         var subIds = document.queryBlockEntities(data.getReferencedBlockId());
         var count = 0;
         for (var i=0; i<subIds.length; ++i) {
-            // QCAD applies the reference transform here, so nested geometry is
-            // counted in the same coordinate system as the containing reference.
             var subEntity = data.queryEntity(subIds[i], true);
             count += BasiDraftDxfAnalysis.countGeometry(document, subEntity, depth+1);
         }
@@ -116,6 +113,109 @@ BasiDraftDxfAnalysis.boxToObject = function(box) {
     };
 };
 
+BasiDraftDxfAnalysis.makeGeometryRecord = function(document, entity) {
+    var data = entity.getData();
+    return {
+        entityId: entity.getId(),
+        entityType: entity.getType(),
+        primitiveCount: BasiDraftDxfAnalysis.countGeometry(document, entity, 0),
+        box: BasiDraftDxfAnalysis.boxToObject(data.getBoundingBox())
+    };
+};
+
+BasiDraftDxfAnalysis.createEmptySnapshot = function() {
+    return {
+        lines: [],
+        arcs: [],
+        circles: [],
+        unsupportedPrimitiveCount: 0
+    };
+};
+
+BasiDraftDxfAnalysis.collectSnapshotPrimitives = function(document, entity, snapshot, depth) {
+    if (isNull(entity)) {
+        return;
+    }
+    if (isNull(depth)) {
+        depth = 0;
+    }
+    if (depth > 32) {
+        ++snapshot.unsupportedPrimitiveCount;
+        return;
+    }
+
+    var type = entity.getType();
+    if (BasiDraftDxfAnalysis.isForeignAnnotationType(type)) {
+        return;
+    }
+
+    var data = entity.getData();
+
+    if (type === RS.EntityLine) {
+        var start = data.getStartPoint();
+        var end = data.getEndPoint();
+        snapshot.lines.push({
+            x1: start.x,
+            y1: start.y,
+            x2: end.x,
+            y2: end.y
+        });
+        return;
+    }
+
+    if (type === RS.EntityArc) {
+        var center = data.getCenter();
+        snapshot.arcs.push({
+            cx: center.x,
+            cy: center.y,
+            radius: data.getRadius(),
+            startAngleDeg: data.getStartAngle() * 180.0 / Math.PI,
+            endAngleDeg: data.getEndAngle() * 180.0 / Math.PI
+        });
+        return;
+    }
+
+    if (type === RS.EntityCircle) {
+        var circleCenter = data.getCenter();
+        snapshot.circles.push({
+            cx: circleCenter.x,
+            cy: circleCenter.y,
+            radius: data.getRadius()
+        });
+        return;
+    }
+
+    if (type === RS.EntityBlockRef || type === RS.EntityBlockRefAttr) {
+        var subIds = document.queryBlockEntities(data.getReferencedBlockId());
+        for (var i=0; i<subIds.length; ++i) {
+            // queryEntity(..., true) applies the complete block-reference
+            // transform, which is essential for comparing regenerated views in
+            // their actual sheet coordinates.
+            var subEntity = data.queryEntity(subIds[i], true);
+            BasiDraftDxfAnalysis.collectSnapshotPrimitives(
+                document,
+                subEntity,
+                snapshot,
+                depth + 1
+            );
+        }
+        return;
+    }
+
+    if (BasiDraftDxfAnalysis.isGeometryPrimitiveType(type)) {
+        ++snapshot.unsupportedPrimitiveCount;
+    }
+};
+
+BasiDraftDxfAnalysis.createSnapshotForEntityIds = function(document, entityIds) {
+    var snapshot = BasiDraftDxfAnalysis.createEmptySnapshot();
+    for (var i=0; i<entityIds.length; ++i) {
+        var entity = document.queryEntity(entityIds[i]);
+        BasiDraftDxfAnalysis.collectSnapshotPrimitives(document, entity, snapshot, 0);
+    }
+    return snapshot;
+};
+
 BasiDraftDxfAnalysis.analyzeDocument = function(document) {
     var result = {
         totalTopLevelEntities: 0,
@@ -124,7 +224,9 @@ BasiDraftDxfAnalysis.analyzeDocument = function(document) {
         looseGeometryCount: 0,
         ignoredOtherCount: 0,
         frameCandidates: [],
-        blockCandidates: []
+        blockCandidates: [],
+        looseGeometry: [],
+        geometryItems: []
     };
 
     if (isNull(document)) {
@@ -152,25 +254,27 @@ BasiDraftDxfAnalysis.analyzeDocument = function(document) {
             ++result.topLevelBlockReferenceCount;
             var data = entity.getData();
             var box = data.getBoundingBox();
-            var record = {
-                entityId: entity.getId(),
-                referencedBlockId: data.getReferencedBlockId(),
-                referencedBlockName: document.getBlockName(data.getReferencedBlockId()),
-                primitiveCount: BasiDraftDxfAnalysis.countGeometry(document, entity, 0),
-                box: BasiDraftDxfAnalysis.boxToObject(box)
-            };
+            var record = BasiDraftDxfAnalysis.makeGeometryRecord(document, entity);
+            record.referencedBlockId = data.getReferencedBlockId();
+            record.referencedBlockName = document.getBlockName(data.getReferencedBlockId());
+            record.sourceKind = "block";
 
             if (BasiDraftDxfAnalysis.isIsoPaperBox(box)) {
                 result.frameCandidates.push(record);
             }
             else {
                 result.blockCandidates.push(record);
+                result.geometryItems.push(record);
             }
             continue;
         }
 
         if (BasiDraftDxfAnalysis.isGeometryPrimitiveType(type)) {
             ++result.looseGeometryCount;
+            var loose = BasiDraftDxfAnalysis.makeGeometryRecord(document, entity);
+            loose.sourceKind = "loose";
+            result.looseGeometry.push(loose);
+            result.geometryItems.push(loose);
             continue;
         }
 
