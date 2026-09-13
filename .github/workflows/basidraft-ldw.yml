@@ -70,8 +70,8 @@ jobs:
             qt6-base-dev qt6-declarative-dev qt6-svg-dev
       - name: Configure QCAD / BasiDraft
         run: cmake -S . -B build -G Ninja -DBUILD_QT6=ON
-      - name: Build QCAD executable and LDW plugin
-        run: cmake --build build --target qcad basidraftldw --parallel 2
+      - name: Build QCAD executable and import plugins
+        run: cmake --build build --target qcad basidraftldw qcaddxf --parallel 2
       - name: Verify automatic overall dimensions in QCAD runtime
         env:
           QT_QPA_PLATFORM: offscreen
@@ -93,4 +93,15 @@ jobs:
             -filter "BAZIS LDW (*.ldw)" \
             tests/fixtures/ldw/line_diagonal_100x50.ldw \
             -exec scripts/Developer/BasiDraft/BasiDraftLdwEndToEnd.js \
+            -quit
+      - name: Verify DXF analysis classification in QCAD runtime
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          ./debug/qcad-bin \
+            -allow-multiple-instances \
+            -no-show \
+            -config /tmp/basidraft-dxf-analysis.ini \
+            tests/fixtures/dxf/basidraft_views_r12.dxf \
+            -exec scripts/Developer/BasiDraft/BasiDraftDxfAnalysisSmoke.js \
             -quit
