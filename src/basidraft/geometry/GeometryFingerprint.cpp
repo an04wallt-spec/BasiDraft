@@ -1,10 +1,7 @@
 #include "GeometryFingerprint.h"
 
 #include <algorithm>
-#include <array>
-#include <cmath>
 #include <cstring>
-#include <string>
 #include <vector>
 
 namespace basidraft::geometry {
@@ -21,24 +18,6 @@ void hashByte(std::uint64_t& hash, std::uint8_t byte) {
 void hashU64(std::uint64_t& hash, std::uint64_t value) {
     for (int i = 0; i < 8; ++i) {
         hashByte(hash, static_cast<std::uint8_t>((value >> (i * 8)) & 0xFFU));
-    }
-}
-
-void hashDouble(std::uint64_t& hash, double value) {
-    // Normalize signed zero so geometrically identical values hash equally.
-    if (value == 0.0) {
-        value = 0.0;
-    }
-    std::uint64_t bits = 0;
-    static_assert(sizeof(bits) == sizeof(value));
-    std::memcpy(&bits, &value, sizeof(value));
-    hashU64(hash, bits);
-}
-
-void hashString(std::uint64_t& hash, const std::string& value) {
-    hashU64(hash, static_cast<std::uint64_t>(value.size()));
-    for (unsigned char ch : value) {
-        hashByte(hash, ch);
     }
 }
 
@@ -64,6 +43,17 @@ struct Token {
     }
 };
 
+void appendU16(std::vector<std::uint8_t>& out, std::uint16_t value) {
+    out.push_back(static_cast<std::uint8_t>(value & 0xFFU));
+    out.push_back(static_cast<std::uint8_t>((value >> 8U) & 0xFFU));
+}
+
+void appendU32(std::vector<std::uint8_t>& out, std::uint32_t value) {
+    for (int i = 0; i < 4; ++i) {
+        out.push_back(static_cast<std::uint8_t>((value >> (i * 8)) & 0xFFU));
+    }
+}
+
 void appendU64(std::vector<std::uint8_t>& out, std::uint64_t value) {
     for (int i = 0; i < 8; ++i) {
         out.push_back(static_cast<std::uint8_t>((value >> (i * 8)) & 0xFFU));
@@ -71,10 +61,12 @@ void appendU64(std::vector<std::uint8_t>& out, std::uint64_t value) {
 }
 
 void appendDouble(std::vector<std::uint8_t>& out, double value) {
+    // Normalize signed zero so geometrically identical values hash equally.
     if (value == 0.0) {
         value = 0.0;
     }
     std::uint64_t bits = 0;
+    static_assert(sizeof(bits) == sizeof(value));
     std::memcpy(&bits, &value, sizeof(value));
     appendU64(out, bits);
 }
@@ -84,9 +76,9 @@ void appendString(std::vector<std::uint8_t>& out, const std::string& value) {
     out.insert(out.end(), value.begin(), value.end());
 }
 
-Token lineToken(const ldw::LineEntity& line) {
-    ldw::Point2d a = line.start;
-    ldw::Point2d b = line.end;
+Token lineToken(const ldw::LineEntity& line, double originX, double originY) {
+    ldw::Point2d a{line.start.x - originX, line.start.y - originY};
+    ldw::Point2d b{line.end.x - originX, line.end.y - originY};
     if (b.x < a.x || (b.x == a.x && b.y < a.y)) {
         std::swap(a, b);
     }
@@ -100,11 +92,11 @@ Token lineToken(const ldw::LineEntity& line) {
     return token;
 }
 
-Token circleToken(const ldw::CircleEntity& circle) {
+Token circleToken(const ldw::CircleEntity& circle, double originX, double originY) {
     Token token;
     token.bytes.push_back(2);
-    appendDouble(token.bytes, circle.center.x);
-    appendDouble(token.bytes, circle.center.y);
+    appendDouble(token.bytes, circle.center.x - originX);
+    appendDouble(token.bytes, circle.center.y - originY);
     appendDouble(token.bytes, circle.radius);
     return token;
 }
@@ -119,41 +111,17 @@ Token textToken(const ldw::TextEntity& text) {
     return token;
 }
 
-} // namespace
+Token unknownToken(const ldw::UnknownEntity& unknown) {
+    Token token;
+    token.bytes.push_back(0xFF);
+    appendU16(token.bytes, unknown.type);
+    appendU32(token.bytes, unknown.declaredSize);
+    appendU64(token.bytes, static_cast<std::uint64_t>(unknown.remainingBytes.size()));
+    token.bytes.insert(token.bytes.end(), unknown.remainingBytes.begin(), unknown.remainingBytes.end());
+    return token;
+}
 
-GeometryFingerprint fingerprint(const ldw::Document& document) {
-    GeometryFingerprint result;
-    std::vector<Token> tokens;
-    tokens.reserve(document.entities.size());
-
-    for (const ldw::Entity& entity : document.entities) {
-        if (const auto* line = std::get_if<ldw::LineEntity>(&entity.data)) {
-            ++result.lineCount;
-            includePoint(result.bounds, line->start.x, line->start.y);
-            includePoint(result.bounds, line->end.x, line->end.y);
-            tokens.push_back(lineToken(*line));
-            continue;
-        }
-
-        if (const auto* circle = std::get_if<ldw::CircleEntity>(&entity.data)) {
-            ++result.circleCount;
-            includePoint(result.bounds, circle->center.x - circle->radius, circle->center.y - circle->radius);
-            includePoint(result.bounds, circle->center.x + circle->radius, circle->center.y + circle->radius);
-            tokens.push_back(circleToken(*circle));
-            continue;
-        }
-
-        if (const auto* text = std::get_if<ldw::TextEntity>(&entity.data)) {
-            ++result.textCount;
-            // Text is intentionally excluded from bounds until its placement fields
-            // are verified against controlled BAZIS fixtures.
-            tokens.push_back(textToken(*text));
-            continue;
-        }
-
-        ++result.unknownCount;
-    }
-
+std::uint64_t hashTokens(std::vector<Token> tokens) {
     std::sort(tokens.begin(), tokens.end());
 
     std::uint64_t hash = kFnvOffset;
@@ -164,8 +132,70 @@ GeometryFingerprint fingerprint(const ldw::Document& document) {
             hashByte(hash, byte);
         }
     }
-    result.exactHash = hash;
+    return hash;
+}
 
+} // namespace
+
+GeometryFingerprint fingerprint(const ldw::Document& document) {
+    GeometryFingerprint result;
+
+    // First pass: establish geometric bounds. Text is intentionally excluded
+    // until its insertion point / alignment fields are verified from BAZIS.
+    for (const ldw::Entity& entity : document.entities) {
+        if (const auto* line = std::get_if<ldw::LineEntity>(&entity.data)) {
+            ++result.lineCount;
+            includePoint(result.bounds, line->start.x, line->start.y);
+            includePoint(result.bounds, line->end.x, line->end.y);
+        }
+        else if (const auto* circle = std::get_if<ldw::CircleEntity>(&entity.data)) {
+            ++result.circleCount;
+            includePoint(result.bounds, circle->center.x - circle->radius, circle->center.y - circle->radius);
+            includePoint(result.bounds, circle->center.x + circle->radius, circle->center.y + circle->radius);
+        }
+        else if (std::holds_alternative<ldw::TextEntity>(entity.data)) {
+            ++result.textCount;
+        }
+        else {
+            ++result.unknownCount;
+        }
+    }
+
+    std::vector<Token> exactTokens;
+    std::vector<Token> shapeTokens;
+    exactTokens.reserve(document.entities.size());
+    shapeTokens.reserve(result.lineCount + result.circleCount);
+
+    const double originX = result.bounds.valid ? result.bounds.minX : 0.0;
+    const double originY = result.bounds.valid ? result.bounds.minY : 0.0;
+
+    for (const ldw::Entity& entity : document.entities) {
+        if (const auto* line = std::get_if<ldw::LineEntity>(&entity.data)) {
+            exactTokens.push_back(lineToken(*line, 0.0, 0.0));
+            shapeTokens.push_back(lineToken(*line, originX, originY));
+            continue;
+        }
+
+        if (const auto* circle = std::get_if<ldw::CircleEntity>(&entity.data)) {
+            exactTokens.push_back(circleToken(*circle, 0.0, 0.0));
+            shapeTokens.push_back(circleToken(*circle, originX, originY));
+            continue;
+        }
+
+        if (const auto* text = std::get_if<ldw::TextEntity>(&entity.data)) {
+            exactTokens.push_back(textToken(*text));
+            // Text is excluded from shape identity until placement semantics are
+            // known. Its content still participates in exact source identity.
+            continue;
+        }
+
+        if (const auto* unknown = std::get_if<ldw::UnknownEntity>(&entity.data)) {
+            exactTokens.push_back(unknownToken(*unknown));
+        }
+    }
+
+    result.exactHash = hashTokens(std::move(exactTokens));
+    result.shapeHash = hashTokens(std::move(shapeTokens));
     return result;
 }
 
