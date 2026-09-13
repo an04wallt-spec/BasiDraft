@@ -95,7 +95,7 @@ NormalizationResult normalizeLines(
 
     if (options.coordinateTolerance <= 0.0 ||
         options.angularTolerance <= 0.0 ||
-        options.mergeGapTolerance < 0.0) {
+        options.microGapTolerance < 0.0) {
         result.lines = input;
         result.stats.outputLineCount = result.lines.size();
         return result;
@@ -138,7 +138,7 @@ NormalizationResult normalizeLines(
         }
     }
 
-    if (!options.mergeCollinearLines) {
+    if (!options.mergeCollinearOverlaps && !options.healCollinearMicroGaps) {
         result.lines = std::move(working);
         result.lines.insert(
             result.lines.end(),
@@ -149,9 +149,9 @@ NormalizationResult normalizeLines(
         return result;
     }
 
-    // Stage 3: conservatively merge segments that lie on the same quantized
-    // infinite line and overlap (or have only a configured micro-gap). This is
-    // presentation geometry only; raw DXF entities remain untouched.
+    // Stage 3: build groups of lines that lie on the same quantized infinite
+    // line. Overlap merging is conservative: merely touching at one endpoint is
+    // not enough, because that endpoint can be a real joint / dimension anchor.
     std::map<CollinearKey, CollinearGroup> groups;
 
     for (const Line2d& line : working) {
@@ -224,7 +224,16 @@ NormalizationResult normalizeLines(
         for (std::size_t i = 1; i < group.intervals.size(); ++i) {
             Interval& current = merged.back();
             const Interval& next = group.intervals[i];
-            if (next.start <= current.end + options.mergeGapTolerance) {
+
+            const bool realOverlap =
+                options.mergeCollinearOverlaps &&
+                next.start < current.end - options.coordinateTolerance;
+
+            const bool healableGap =
+                options.healCollinearMicroGaps &&
+                next.start <= current.end + options.microGapTolerance;
+
+            if (realOverlap || healableGap) {
                 current.end = std::max(current.end, next.end);
             }
             else {
