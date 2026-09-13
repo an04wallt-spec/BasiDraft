@@ -65,6 +65,16 @@ struct SnapshotSimilarity {
     double score = 0.0; // common / max(left, right)
 };
 
+struct SnapshotDiff {
+    SnapshotSimilarity similarity;
+
+    // Exact old/new primitives participating in the localized revision. They
+    // remain in their original drawing coordinates; matching itself may ignore
+    // whole-view translation according to MatchOptions.
+    ViewSnapshot removed;
+    ViewSnapshot added;
+};
+
 struct MatchDecision {
     bool matched = false;
     bool ambiguous = false;
@@ -74,6 +84,12 @@ struct MatchDecision {
 };
 
 SnapshotSimilarity compareViewSnapshots(
+    const ViewSnapshot& left,
+    const ViewSnapshot& right,
+    const MatchOptions& options = {}
+);
+
+SnapshotDiff diffViewSnapshots(
     const ViewSnapshot& left,
     const ViewSnapshot& right,
     const MatchOptions& options = {}
