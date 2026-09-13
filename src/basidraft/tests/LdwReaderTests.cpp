@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
 #include <iostream>
 #include <string>
 #include <variant>
@@ -90,6 +91,45 @@ bool nearlyEqual(double a, double b) {
     return std::abs(a - b) < 1.0e-9;
 }
 
+void verifyRealFixtures(const basidraft::ldw::Reader& reader) {
+    const std::filesystem::path fixtureDir = "tests/fixtures/ldw";
+
+    {
+        const auto document = reader.readFile(fixtureDir / "empty.ldw");
+        assert(document.entities.empty());
+    }
+
+    {
+        const auto document = reader.readFile(fixtureDir / "line_offset.ldw");
+        assert(document.entities.size() == 1);
+        const auto* line = std::get_if<basidraft::ldw::LineEntity>(&document.entities[0].data);
+        assert(line != nullptr);
+        assert(nearlyEqual(line->start.x, 20.0));
+        assert(nearlyEqual(line->start.y, 30.0));
+        assert(nearlyEqual(line->end.x, 120.0));
+        assert(nearlyEqual(line->end.y, 30.0));
+    }
+
+    {
+        const auto document = reader.readFile(fixtureDir / "circle_r25.ldw");
+        assert(document.entities.size() == 1);
+        const auto* circle = std::get_if<basidraft::ldw::CircleEntity>(&document.entities[0].data);
+        assert(circle != nullptr);
+        assert(nearlyEqual(circle->center.x, 0.0));
+        assert(nearlyEqual(circle->center.y, 0.0));
+        assert(nearlyEqual(circle->radius, 25.0));
+    }
+
+    {
+        const auto document = reader.readFile(fixtureDir / "text_test123.ldw");
+        assert(document.entities.size() == 1);
+        const auto* text = std::get_if<basidraft::ldw::TextEntity>(&document.entities[0].data);
+        assert(text != nullptr);
+        assert(text->textUtf8 == u8"ТЕСТ123.");
+        assert(text->fontUtf8 == "Bahnschrift");
+    }
+}
+
 } // namespace
 
 int main() {
@@ -157,6 +197,8 @@ int main() {
         assert(!fp.bounds.valid); // placement intentionally not guessed yet
         assert(fp.exactHash != 0);
     }
+
+    verifyRealFixtures(reader);
 
     std::cout << "BasiDraft LDW reader / geometry tests passed\n";
     return 0;
