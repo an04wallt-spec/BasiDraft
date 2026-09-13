@@ -124,7 +124,7 @@ jobs:
             tests/fixtures/ldw/line_diagonal_100x50.ldw \
             -exec scripts/Developer/BasiDraft/BasiDraftLdwEndToEnd.js \
             -quit
-      - name: Verify DXF analysis classification in QCAD runtime
+      - name: Verify DXF analysis and logical views in QCAD runtime
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
@@ -134,4 +134,27 @@ jobs:
             -config /tmp/basidraft-dxf-analysis.ini \
             tests/fixtures/dxf/basidraft_views_r12.dxf \
             -exec scripts/Developer/BasiDraft/BasiDraftDxfAnalysisSmoke.js \
+            -quit
+      - name: Persist logical views from old DXF project revision
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          rm -f /tmp/basidraft-revision.ini
+          ./debug/qcad-bin \
+            -allow-multiple-instances \
+            -no-show \
+            -config /tmp/basidraft-revision.ini \
+            tests/fixtures/dxf/basidraft_revision_old_r12.dxf \
+            -exec scripts/Developer/BasiDraft/BasiDraftRevisionSaveSmoke.js \
+            -quit
+      - name: Reopen regenerated DXF and update revision state
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          ./debug/qcad-bin \
+            -allow-multiple-instances \
+            -no-show \
+            -config /tmp/basidraft-revision.ini \
+            tests/fixtures/dxf/basidraft_revision_new_r12.dxf \
+            -exec scripts/Developer/BasiDraft/BasiDraftRevisionCheckSmoke.js \
             -quit
