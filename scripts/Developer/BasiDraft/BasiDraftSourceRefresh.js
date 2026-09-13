@@ -7,8 +7,8 @@ include("scripts/Developer/BasiDraft/BasiDraftDimensionBinding.js");
  *
  * Safety policy:
  * - regenerated DXF must contain geometry only (no foreign annotation objects);
- * - every existing bound dimension is preflighted before any mutation;
- * - NeedsReview / Lost bindings abort automatic refresh entirely;
+ * - every BasiDraft-owned dimension must have a valid semantic binding;
+ * - NeedsReview / Lost / owned-unbound bindings abort refresh before mutation;
  * - source replacement and bound-dimension updates share one QCAD transaction
  *   group so one Undo / Redo operates on the complete refresh.
  */
@@ -23,6 +23,7 @@ BasiDraftSourceRefresh.preflightDimensions = function(document, comparison, tole
         needsReview:0,
         lost:0,
         unbound:0,
+        unboundOwned:0,
         plans:[]
     };
 
@@ -34,6 +35,10 @@ BasiDraftSourceRefresh.preflightDimensions = function(document, comparison, tole
 
         if (!plan.bound) {
             ++result.unbound;
+            if (BasiDraftOwnership.isOwned(entity)) {
+                ++result.unboundOwned;
+                result.ok = false;
+            }
         }
         else if (plan.status === "Updated") {
             ++result.updated;
@@ -100,7 +105,12 @@ BasiDraftSourceRefresh.apply = function(documentInterface, comparison, tolerance
     );
     result.preflight = preflight;
     if (!preflight.ok) {
-        result.error = "One or more bound dimensions require review";
+        if (preflight.unboundOwned !== 0) {
+            result.error = "One or more BasiDraft dimensions have no semantic binding";
+        }
+        else {
+            result.error = "One or more bound dimensions require review";
+        }
         return result;
     }
 
@@ -161,8 +171,6 @@ BasiDraftSourceRefresh.apply = function(documentInterface, comparison, tolerance
     }
     finally {
         document.setAutoTransactionGroup(oldAutoGroup);
-        // Source refresh deletes only entities, never the current block object.
-        // Therefore the previous current block ID remains valid.
         document.setCurrentBlock(oldCurrentBlockId);
     }
 
