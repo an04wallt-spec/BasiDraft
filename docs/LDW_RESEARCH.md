@@ -4,7 +4,7 @@ These notes describe only facts verified against the current BAZIS test corpus. 
 
 ## Test corpus
 
-The current corpus is `Чертеж1.ldw` through `Чертеж9.ldw`.
+The original controlled corpus is `Чертеж1.ldw` through `Чертеж9.ldw`. Representative real fixtures are committed under `tests/fixtures/ldw/` so regressions are reproducible in CI.
 
 Verified results from the first reader implementation:
 
