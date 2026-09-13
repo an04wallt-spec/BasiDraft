@@ -10,7 +10,35 @@
 #include "RLineEntity.h"
 #include "RCircleEntity.h"
 #include "RVector.h"
+#include "geometry/GeometryFingerprint.h"
 #include "ldw/LdwReader.h"
+
+namespace {
+
+void tagImportedEntity(const QSharedPointer<REntity>& entity,
+                       const basidraft::ldw::Entity& sourceEntity,
+                       const basidraft::geometry::GeometryFingerprint& sourceFingerprint,
+                       const QString& sourceFileName) {
+    entity->setCustomProperty("BasiDraft", "SourceFormat", "LDW");
+    entity->setCustomProperty("BasiDraft", "SourceFile", sourceFileName);
+    entity->setCustomProperty(
+        "BasiDraft",
+        "SourceGeometryHash",
+        QString::number(static_cast<qulonglong>(sourceFingerprint.exactHash))
+    );
+    entity->setCustomProperty(
+        "BasiDraft",
+        "SourceOffset",
+        QString::number(static_cast<qulonglong>(sourceEntity.fileOffset))
+    );
+    entity->setCustomProperty(
+        "BasiDraft",
+        "LdwType",
+        QString::number(static_cast<unsigned int>(sourceEntity.ldwType))
+    );
+}
+
+} // namespace
 
 RLdwImporter::RLdwImporter(RDocument& document,
                            RMessageHandler* messageHandler,
@@ -75,6 +103,11 @@ bool RLdwImporter::importFile(const QString& fileName,
         return false;
     }
 
+    const auto sourceFingerprint = basidraft::geometry::fingerprint(source);
+    const QString canonicalSource = fileInfo.canonicalFilePath().isEmpty()
+        ? fileInfo.absoluteFilePath()
+        : fileInfo.canonicalFilePath();
+
     setCurrentBlockId(document->getModelSpaceBlockId());
     RImporter::startImport();
 
@@ -91,6 +124,7 @@ bool RLdwImporter::importFile(const QString& fileName,
             );
             entity->setBlockId(getCurrentBlockId());
             entity->setLayerId(document->getLayer0Id());
+            tagImportedEntity(entity, sourceEntity, sourceFingerprint, canonicalSource);
             importObjectP(entity);
             continue;
         }
@@ -107,6 +141,7 @@ bool RLdwImporter::importFile(const QString& fileName,
             );
             entity->setBlockId(getCurrentBlockId());
             entity->setLayerId(document->getLayer0Id());
+            tagImportedEntity(entity, sourceEntity, sourceFingerprint, canonicalSource);
             importObjectP(entity);
         }
     }
