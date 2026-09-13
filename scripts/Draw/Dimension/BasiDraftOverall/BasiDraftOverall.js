@@ -13,6 +13,44 @@ function BasiDraftOverall(guiAction) {
 
 BasiDraftOverall.prototype = new EAction();
 
+BasiDraftOverall.createDimensionData = function(box, offset) {
+    var result = [];
+    if (isNull(box) || !box.isValid() || !box.isSane()) {
+        return result;
+    }
+
+    var min = box.getMinimum();
+    var max = box.getMaximum();
+    var width = box.getWidth();
+    var height = box.getHeight();
+
+    if (width > RS.PointTolerance) {
+        var horizontal = new RDimRotatedData();
+        horizontal.setExtensionPoint1(new RVector(min.x, min.y));
+        horizontal.setExtensionPoint2(new RVector(max.x, min.y));
+        horizontal.setDefinitionPoint(new RVector((min.x + max.x) / 2.0, min.y - offset));
+        horizontal.setRotation(0.0);
+        horizontal.setLinearFactor(1.0);
+        if (horizontal.isValid()) {
+            result.push(horizontal);
+        }
+    }
+
+    if (height > RS.PointTolerance) {
+        var vertical = new RDimRotatedData();
+        vertical.setExtensionPoint1(new RVector(min.x, min.y));
+        vertical.setExtensionPoint2(new RVector(min.x, max.y));
+        vertical.setDefinitionPoint(new RVector(min.x - offset, (min.y + max.y) / 2.0));
+        vertical.setRotation(Math.PI / 2.0);
+        vertical.setLinearFactor(1.0);
+        if (vertical.isValid()) {
+            result.push(vertical);
+        }
+    }
+
+    return result;
+};
+
 BasiDraftOverall.prototype.beginEvent = function() {
     EAction.prototype.beginEvent.call(this);
 
@@ -32,11 +70,8 @@ BasiDraftOverall.prototype.beginEvent = function() {
         return;
     }
 
-    var min = box.getMinimum();
-    var max = box.getMaximum();
     var width = box.getWidth();
     var height = box.getHeight();
-
     if (width <= RS.PointTolerance && height <= RS.PointTolerance) {
         EAction.handleUserMessage(qsTr("Выделенная геометрия не имеет измеримого габарита."));
         this.terminate();
@@ -56,7 +91,7 @@ BasiDraftOverall.prototype.beginEvent = function() {
         dimExe = dimStyle.getDouble(RS.DIMEXE);
     }
 
-    if (!isNumber(dimScale) || dimScale <= 0.0) {
+    if (typeof(dimScale) !== "number" || isNaN(dimScale) || dimScale <= 0.0) {
         dimScale = 1.0;
     }
 
@@ -66,46 +101,22 @@ BasiDraftOverall.prototype.beginEvent = function() {
 
     // Prevent a pathological zero / tiny dimension style from putting the
     // dimension line directly on top of the view.
-    if (!isNumber(offset) || offset <= RS.PointTolerance) {
+    if (typeof(offset) !== "number" || isNaN(offset) || offset <= RS.PointTolerance) {
         offset = Math.max(10.0, Math.max(width, height) * 0.025);
+    }
+
+    var data = BasiDraftOverall.createDimensionData(box, offset);
+    if (data.length === 0) {
+        EAction.handleUserMessage(qsTr("Не удалось создать габаритные размеры."));
+        this.terminate();
+        return;
     }
 
     var op = new RAddObjectsOperation();
     op.setText(qsTr("BasiDraft: габаритные размеры"));
-    var count = 0;
 
-    if (width > RS.PointTolerance) {
-        var horizontal = new RDimRotatedData();
-        horizontal.setExtensionPoint1(new RVector(min.x, min.y));
-        horizontal.setExtensionPoint2(new RVector(max.x, min.y));
-        horizontal.setDefinitionPoint(new RVector((min.x + max.x) / 2.0, min.y - offset));
-        horizontal.setRotation(0.0);
-        horizontal.setLinearFactor(1.0);
-
-        if (horizontal.isValid()) {
-            op.addObject(new RDimRotatedEntity(document, horizontal));
-            count++;
-        }
-    }
-
-    if (height > RS.PointTolerance) {
-        var vertical = new RDimRotatedData();
-        vertical.setExtensionPoint1(new RVector(min.x, min.y));
-        vertical.setExtensionPoint2(new RVector(min.x, max.y));
-        vertical.setDefinitionPoint(new RVector(min.x - offset, (min.y + max.y) / 2.0));
-        vertical.setRotation(Math.PI / 2.0);
-        vertical.setLinearFactor(1.0);
-
-        if (vertical.isValid()) {
-            op.addObject(new RDimRotatedEntity(document, vertical));
-            count++;
-        }
-    }
-
-    if (count === 0) {
-        EAction.handleUserMessage(qsTr("Не удалось создать габаритные размеры."));
-        this.terminate();
-        return;
+    for (var i = 0; i < data.length; ++i) {
+        op.addObject(new RDimRotatedEntity(document, data[i]));
     }
 
     di.applyOperation(op);
