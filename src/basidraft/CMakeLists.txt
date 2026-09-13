@@ -15,6 +15,10 @@ add_library(basidraft_ldw STATIC
     geometry/ViewClusterer.h
     geometry/RevisionPipeline.cpp
     geometry/RevisionPipeline.h
+    geometry/LocalRevisionMotion.cpp
+    geometry/LocalRevisionMotion.h
+    dimensions/DimensionBindingUpdater.cpp
+    dimensions/DimensionBindingUpdater.h
 )
 
 target_compile_features(basidraft_ldw PUBLIC cxx_std_17)
