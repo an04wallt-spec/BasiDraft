@@ -57,6 +57,8 @@ int main() {
         options
     );
     assert(std::abs(translatedSimilarity.score - 1.0) < 1.0e-12);
+    assert(translatedSimilarity.removedPrimitiveCount == 0);
+    assert(translatedSimilarity.addedPrimitiveCount == 0);
 
     // Verified BAZIS behavior: unchanged geometry may be regenerated with tiny
     // numerical noise. This must not create a false revision.
@@ -70,6 +72,8 @@ int main() {
         options
     );
     assert(std::abs(jitterSimilarity.score - 1.0) < 1.0e-12);
+    assert(jitterSimilarity.removedPrimitiveCount == 0);
+    assert(jitterSimilarity.addedPrimitiveCount == 0);
 
     // A moved shelf is still the same logical view, but with a localized change.
     // 14 stable + 4 moved primitives => 14/18 = 0.777...
@@ -82,6 +86,8 @@ int main() {
     assert(changedSimilarity.commonPrimitiveCount == 14);
     assert(changedSimilarity.leftPrimitiveCount == 18);
     assert(changedSimilarity.rightPrimitiveCount == 18);
+    assert(changedSimilarity.removedPrimitiveCount == 4);
+    assert(changedSimilarity.addedPrimitiveCount == 4);
     assert(std::abs(changedSimilarity.score - (14.0 / 18.0)) < 1.0e-12);
 
     // Best-match selection must choose the changed version over an unrelated view.
