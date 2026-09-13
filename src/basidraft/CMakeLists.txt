@@ -14,5 +14,6 @@ target_include_directories(basidraft_ldw PUBLIC
 )
 
 set_target_properties(basidraft_ldw PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
     FOLDER "BasiDraft"
 )
