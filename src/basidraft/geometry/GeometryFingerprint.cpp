@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <utility>
 #include <vector>
 
 namespace basidraft::geometry {
@@ -195,7 +196,7 @@ GeometryFingerprint fingerprint(const ldw::Document& document) {
     }
 
     result.exactHash = hashTokens(std::move(exactTokens));
-    result.shapeHash = hashTokens(std::move(shapeTokens));
+    result.shapeHash = shapeTokens.empty() ? 0 : hashTokens(std::move(shapeTokens));
     return result;
 }
 
