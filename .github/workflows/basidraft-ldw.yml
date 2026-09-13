@@ -61,6 +61,17 @@ jobs:
             -o /tmp/basidraft-revision-pipeline-tests
       - name: Run complete revision pipeline tests
         run: /tmp/basidraft-revision-pipeline-tests
+      - name: Build revision-aware dimension binding tests
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -pedantic \
+            src/basidraft/geometry/ViewMatcher.cpp \
+            src/basidraft/geometry/LocalRevisionMotion.cpp \
+            src/basidraft/dimensions/DimensionBindingUpdater.cpp \
+            src/basidraft/tests/DimensionRevisionTests.cpp \
+            -Isrc/basidraft \
+            -o /tmp/basidraft-dimension-revision-tests
+      - name: Run revision-aware dimension binding tests
+        run: /tmp/basidraft-dimension-revision-tests
 
   plugin-build:
     runs-on: ubuntu-latest
