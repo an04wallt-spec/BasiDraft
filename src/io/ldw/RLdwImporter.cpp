@@ -47,6 +47,34 @@ bool RLdwImporter::importFile(const QString& fileName,
         return false;
     }
 
+    // Exactness is more important than a partial drawing. Until every encountered
+    // entity can be placed reliably, refuse the whole import instead of silently
+    // dropping unsupported geometry or annotations.
+    bool fullySupported = source.warnings.empty();
+    for (const basidraft::ldw::Entity& sourceEntity : source.entities) {
+        if (std::holds_alternative<basidraft::ldw::TextEntity>(sourceEntity.data)) {
+            qWarning() << "RLdwImporter: text entity is recognized, but its placement is not decoded yet; offset"
+                       << static_cast<qulonglong>(sourceEntity.fileOffset);
+            fullySupported = false;
+        }
+        else if (std::holds_alternative<basidraft::ldw::UnknownEntity>(sourceEntity.data)) {
+            qWarning() << "RLdwImporter: unsupported LDW entity type"
+                       << sourceEntity.ldwType
+                       << "at offset"
+                       << static_cast<qulonglong>(sourceEntity.fileOffset);
+            fullySupported = false;
+        }
+    }
+
+    for (const std::string& warning : source.warnings) {
+        qWarning().noquote() << QString::fromStdString(warning);
+    }
+
+    if (!fullySupported) {
+        qWarning() << "RLdwImporter: import cancelled because the drawing cannot yet be reproduced exactly";
+        return false;
+    }
+
     setCurrentBlockId(document->getModelSpaceBlockId());
     RImporter::startImport();
 
@@ -80,25 +108,7 @@ bool RLdwImporter::importFile(const QString& fileName,
             entity->setBlockId(getCurrentBlockId());
             entity->setLayerId(document->getLayer0Id());
             importObjectP(entity);
-            continue;
         }
-
-        if (std::holds_alternative<basidraft::ldw::TextEntity>(sourceEntity.data)) {
-            // Text payload is recognized, but its insertion point / alignment fields
-            // are not verified yet. Do not guess geometry in production import.
-            qWarning() << "RLdwImporter: text entity recognized but placement is not decoded yet; offset"
-                       << static_cast<qulonglong>(sourceEntity.fileOffset);
-            continue;
-        }
-
-        qWarning() << "RLdwImporter: unsupported LDW entity type"
-                   << sourceEntity.ldwType
-                   << "at offset"
-                   << static_cast<qulonglong>(sourceEntity.fileOffset);
-    }
-
-    for (const std::string& warning : source.warnings) {
-        qWarning().noquote() << QString::fromStdString(warning);
     }
 
     document->setFileVersion("BAZIS LDW (*.ldw)");
