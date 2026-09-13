@@ -17,32 +17,35 @@ jobs:
   import-upstream:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+
     steps:
       - name: Checkout BasiDraft
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Import exact QCAD 3.33.1 upstream history
+      - name: Import QCAD Community Edition 3.33.1 source tree
         shell: bash
         run: |
           set -euo pipefail
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          if git remote get-url upstream >/dev/null 2>&1; then
-            git remote set-url upstream https://github.com/qcad/qcad.git
-          else
-            git remote add upstream https://github.com/qcad/qcad.git
-          fi
-
-          # This upstream commit reports R_QCAD_VERSION_STRING as 3.33.1.
           QCAD_COMMIT="1bf8d0c6f83b7bb034cfd62b7346255370b9ddca"
-          git fetch upstream "$QCAD_COMMIT" --no-tags
-          git merge --allow-unrelated-histories -X theirs "$QCAD_COMMIT" \
-            -m "Import QCAD Community Edition 3.33.1 upstream"
+          TMP_DIR="$(mktemp -d)"
 
-          cat > BASIDRAFT.md <<'EOF'
+          git -C "$TMP_DIR" init
+          git -C "$TMP_DIR" remote add origin https://github.com/qcad/qcad.git
+          git -C "$TMP_DIR" fetch --depth=1 origin "$QCAD_COMMIT"
+          git -C "$TMP_DIR" checkout --detach FETCH_HEAD
+
+          rsync -a \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            "$TMP_DIR/" "$GITHUB_WORKSPACE/"
+
+          cat > "$GITHUB_WORKSPACE/BASIDRAFT.md" <<'EOF'
           # BasiDraft
 
           BasiDraft is developed directly from the QCAD Community Edition source tree.
@@ -50,16 +53,20 @@ jobs:
           Upstream baseline: qcad/qcad commit 1bf8d0c6f83b7bb034cfd62b7346255370b9ddca (QCAD 3.33.1).
 
           Development principles:
-          - keep the original CAD core and modify it directly rather than rebuilding a separate clone;
+          - modify the original CAD source tree directly, not a parallel reimplementation;
           - Windows x64 is the primary target;
           - Russian is the primary UI language;
           - preserve upstream GPLv3 and all third-party license notices;
-          - first obtain a reproducible clean build, then simplify the UI and add BasiDraft automation.
+          - first establish a reproducible clean build, then simplify the UI and add BasiDraft automation.
           EOF
 
-          git add BASIDRAFT.md .github/workflows/bootstrap-qcad.yml
-          git commit -m "Add BasiDraft project notes" || true
-          git push origin HEAD:main
+          git add -A
+          if git diff --cached --quiet; then
+            echo "QCAD source tree is already imported."
+          else
+            git commit -m "Import QCAD Community Edition 3.33.1 source tree"
+            git push origin HEAD:main
+          fi
 
       - name: Verify imported QCAD tree
         shell: bash
@@ -68,4 +75,6 @@ jobs:
           test -d src
           test -d scripts
           test -f README.md
-          echo "QCAD source tree imported successfully."
+          test -f src/core/RVersion.h
+          grep -q 'R_QCAD_VERSION_STRING "3.33.1"' src/core/RVersion.h
+          echo "QCAD 3.33.1 source tree imported successfully."
