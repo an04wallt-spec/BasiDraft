@@ -1,0 +1,204 @@
+name: BasiDraft core
+
+on:
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: basidraft-core-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  core-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build LDW reader tests
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -pedantic \
+            src/basidraft/ldw/LdwReader.cpp \
+            src/basidraft/geometry/GeometryFingerprint.cpp \
+            src/basidraft/tests/LdwReaderTests.cpp \
+            -Isrc/basidraft \
+            -o /tmp/basidraft-ldw-tests
+      - name: Run LDW reader tests
+        run: /tmp/basidraft-ldw-tests
+      - name: Build view revision matcher tests
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -pedantic \
+            src/basidraft/geometry/ViewMatcher.cpp \
+            src/basidraft/tests/ViewMatcherTests.cpp \
+            -Isrc/basidraft \
+            -o /tmp/basidraft-view-matcher-tests
+      - name: Run view revision matcher tests
+        run: /tmp/basidraft-view-matcher-tests
+      - name: Build geometry normalizer tests
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -pedantic \
+            src/basidraft/geometry/ViewMatcher.cpp \
+            src/basidraft/geometry/GeometryNormalizer.cpp \
+            src/basidraft/tests/GeometryNormalizerTests.cpp \
+            -Isrc/basidraft \
+            -o /tmp/basidraft-geometry-normalizer-tests
+      - name: Run geometry normalizer tests
+        run: /tmp/basidraft-geometry-normalizer-tests
+      - name: Build logical view clusterer tests
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -pedantic \
+            src/basidraft/geometry/ViewClusterer.cpp \
+            src/basidraft/tests/ViewClustererTests.cpp \
+            -Isrc/basidraft \
+            -o /tmp/basidraft-view-clusterer-tests
+      - name: Run logical view clusterer tests
+        run: /tmp/basidraft-view-clusterer-tests
+      - name: Build complete revision pipeline tests
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -pedantic \
+            src/basidraft/geometry/ViewMatcher.cpp \
+            src/basidraft/geometry/RevisionPipeline.cpp \
+            src/basidraft/tests/RevisionPipelineTests.cpp \
+            -Isrc/basidraft \
+            -o /tmp/basidraft-revision-pipeline-tests
+      - name: Run complete revision pipeline tests
+        run: /tmp/basidraft-revision-pipeline-tests
+      - name: Build revision-aware dimension binding tests
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -pedantic \
+            src/basidraft/geometry/ViewMatcher.cpp \
+            src/basidraft/geometry/LocalRevisionMotion.cpp \
+            src/basidraft/dimensions/DimensionBindingUpdater.cpp \
+            src/basidraft/tests/DimensionRevisionTests.cpp \
+            -Isrc/basidraft \
+            -o /tmp/basidraft-dimension-revision-tests
+      - name: Run revision-aware dimension binding tests
+        run: /tmp/basidraft-dimension-revision-tests
+
+  plugin-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Qt 6 build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake ninja-build g++ \
+            qt6-base-dev qt6-declarative-dev qt6-svg-dev
+      - name: Configure QCAD / BasiDraft
+        run: cmake -S . -B build -G Ninja -DBUILD_QT6=ON
+      - name: Build LDW plugin and dependencies
+        run: cmake --build build --target basidraftldw --parallel 2
+
+  runtime-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Qt 6 runtime / build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake ninja-build g++ \
+            qt6-base-dev qt6-declarative-dev qt6-svg-dev
+      - name: Configure QCAD / BasiDraft
+        run: cmake -S . -B build -G Ninja -DBUILD_QT6=ON
+      - name: Build QCAD executable and import plugins
+        run: cmake --build build --target qcad basidraftldw qcaddxf --parallel 2
+      - name: Verify automatic overall dimensions in QCAD runtime
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          ./debug/qcad-bin \
+            -allow-multiple-instances \
+            -no-show \
+            -config /tmp/basidraft-smoke.ini \
+            -exec scripts/Developer/BasiDraft/BasiDraftScriptSmoke.js \
+            -quit
+      - name: Verify real BAZIS LDW to automatic dimensions end-to-end
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          ./debug/qcad-bin \
+            -allow-multiple-instances \
+            -no-show \
+            -config /tmp/basidraft-e2e.ini \
+            -filter "BAZIS LDW (*.ldw)" \
+            tests/fixtures/ldw/line_diagonal_100x50.ldw \
+            -exec scripts/Developer/BasiDraft/BasiDraftLdwEndToEnd.js \
+            -quit
+      - name: Verify DXF analysis and logical views in QCAD runtime
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          ./debug/qcad-bin \
+            -allow-multiple-instances \
+            -no-show \
+            -config /tmp/basidraft-dxf-analysis.ini \
+            tests/fixtures/dxf/basidraft_views_r12.dxf \
+            -exec scripts/Developer/BasiDraft/BasiDraftDxfAnalysisSmoke.js \
+            -quit
+      - name: Persist logical views from old DXF project revision
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          rm -f /tmp/basidraft-revision.ini
+          ./debug/qcad-bin \
+            -allow-multiple-instances \
+            -no-show \
+            -config /tmp/basidraft-revision.ini \
+            tests/fixtures/dxf/basidraft_revision_old_r12.dxf \
+            -exec scripts/Developer/BasiDraft/BasiDraftRevisionSaveSmoke.js \
+            -quit
+      - name: Reopen regenerated DXF and update revision state
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          ./debug/qcad-bin \
+            -allow-multiple-instances \
+            -no-show \
+            -config /tmp/basidraft-revision.ini \
+            tests/fixtures/dxf/basidraft_revision_new_r12.dxf \
+            -exec scripts/Developer/BasiDraft/BasiDraftRevisionCheckSmoke.js \
+            -quit
+      - name: Compare regenerated DXF through hidden in-memory document
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          ./debug/qcad-bin \
+            -allow-multiple-instances \
+            -no-show \
+            -config /tmp/basidraft-hidden-update.ini \
+            tests/fixtures/dxf/basidraft_revision_old_r12.dxf \
+            -exec scripts/Developer/BasiDraft/BasiDraftUpdateFromDxfSmoke.js \
+            -quit
+      - name: Update native bound dimension from regenerated DXF
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          ./debug/qcad-bin \
+            -allow-multiple-instances \
+            -no-show \
+            -config /tmp/basidraft-bound-dimension.ini \
+            tests/fixtures/dxf/basidraft_revision_old_r12.dxf \
+            -exec scripts/Developer/BasiDraft/BasiDraftBoundDimensionUpdateSmoke.js \
+            -quit
+      - name: Atomically replace DXF source and bound dimension with one-step undo redo
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          ./debug/qcad-bin \
+            -allow-multiple-instances \
+            -no-show \
+            -config /tmp/basidraft-atomic-refresh.ini \
+            tests/fixtures/dxf/basidraft_revision_old_r12.dxf \
+            -exec scripts/Developer/BasiDraft/BasiDraftAtomicRefreshSmoke.js \
+            -quit
+      - name: Revise overall dimensions through logical-view extent bindings
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          ./debug/qcad-bin \
+            -allow-multiple-instances \
+            -no-show \
+            -config /tmp/basidraft-extent-binding.ini \
+            tests/fixtures/dxf/basidraft_extent_old_r12.dxf \
+            -exec scripts/Developer/BasiDraft/BasiDraftExtentBindingSmoke.js \
+            -quit

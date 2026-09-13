@@ -6,6 +6,7 @@ project(src VERSION 1.0 LANGUAGES CXX)
 
 add_subdirectory(3rdparty)
 add_subdirectory(core)
+add_subdirectory(basidraft)
 add_subdirectory(spatialindex)
 add_subdirectory(entity)
 add_subdirectory(grid)
