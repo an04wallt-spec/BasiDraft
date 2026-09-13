@@ -24,7 +24,16 @@ struct GeometryFingerprint {
     std::size_t circleCount = 0;
     std::size_t textCount = 0;
     std::size_t unknownCount = 0;
+
+    // Exact source identity: includes absolute geometry coordinates and the
+    // currently decoded text payload. Useful to detect byte-level / geometry
+    // changes in an imported view.
     std::uint64_t exactHash = 0;
+
+    // Shape identity: geometry only (currently lines + circles), translated so
+    // the lower-left geometry bound is at (0, 0). This intentionally survives
+    // moving the same view around a sheet while preserving its geometry.
+    std::uint64_t shapeHash = 0;
 };
 
 GeometryFingerprint fingerprint(const ldw::Document& document);
