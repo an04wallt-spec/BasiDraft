@@ -51,6 +51,21 @@ double verticalGap(const ClusterBox2d& a, const ClusterBox2d& b) {
     );
 }
 
+bool boxContains(
+    const ClusterBox2d& outer,
+    const ClusterBox2d& inner,
+    double tolerance) {
+
+    if (!outer.valid || !inner.valid) {
+        return false;
+    }
+
+    return inner.minX >= outer.minX - tolerance &&
+           inner.minY >= outer.minY - tolerance &&
+           inner.maxX <= outer.maxX + tolerance &&
+           inner.maxY <= outer.maxY + tolerance;
+}
+
 class DisjointSet {
 public:
     explicit DisjointSet(std::size_t size)
@@ -103,6 +118,31 @@ ViewCluster mergeClusters(const ViewCluster& a, const ViewCluster& b) {
     result.box = mergeBoxes(a.box, b.box);
     result.primitiveCount = a.primitiveCount + b.primitiveCount;
     return result;
+}
+
+bool shouldMergeContainedIsland(
+    const ViewCluster& outer,
+    const ViewCluster& inner,
+    const ViewClusterOptions& options) {
+
+    if (!outer.box.valid || !inner.box.valid) {
+        return false;
+    }
+
+    const double outerArea = outer.box.area();
+    const double innerArea = inner.box.area();
+    if (outerArea <= 0.0 || innerArea <= 0.0 || innerArea >= outerArea) {
+        return false;
+    }
+
+    if (!boxContains(outer.box, inner.box, options.containmentTolerance)) {
+        return false;
+    }
+
+    // Do not silently absorb a substantial inset detail / independent view.
+    // The intended use is disconnected hardware and small geometry islands that
+    // are visually embedded inside a much larger furniture view.
+    return innerArea / outerArea <= options.maximumContainedAreaFraction;
 }
 
 bool shouldMergeVerticalIslands(
@@ -215,7 +255,33 @@ std::vector<ViewCluster> clusterLogicalViews(
         std::sort(cluster.sourceIndices.begin(), cluster.sourceIndices.end());
     }
 
-    // Pass 2: one logical view can contain disconnected upper/lower islands.
+    // Pass 2: fold small disconnected islands into a surrounding view if the
+    // already-established aggregate view bounds fully contain them. This is a
+    // common furniture case: hinges / hardware can be disconnected from the
+    // cabinet contour while still being visibly inside the same section view.
+    if (options.mergeContainedIslands) {
+        bool changed = true;
+        while (changed) {
+            changed = false;
+            for (std::size_t outer = 0; outer < clusters.size() && !changed; ++outer) {
+                for (std::size_t inner = 0; inner < clusters.size(); ++inner) {
+                    if (outer == inner) {
+                        continue;
+                    }
+                    if (!shouldMergeContainedIsland(clusters[outer], clusters[inner], options)) {
+                        continue;
+                    }
+
+                    clusters[outer] = mergeClusters(clusters[outer], clusters[inner]);
+                    clusters.erase(clusters.begin() + static_cast<std::ptrdiff_t>(inner));
+                    changed = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    // Pass 3: one logical view can contain disconnected upper/lower islands.
     // Merge only strongly aligned vertical islands. Repeat because merging two
     // pieces can make the complete span eligible for a third piece.
     if (options.mergeVerticallyAlignedIslands) {
